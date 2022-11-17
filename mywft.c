@@ -6,7 +6,7 @@
 	Currently targets type (tpls) 33, of 240x280 resolution, used in the following watches:
 		DAFIT C20		MOY-QHF3		"TANK"-like. Advertised as 280x320 pixels :/
 
-	File type (first byte of file) is 0x04, 0x81 or 0x84 for these faces.
+	File identifier (first byte of file) is 0x04, 0x81 or 0x84 for these faces.
 
 	Copyright 2022 David Atkinson
 	Author: David Atkinson <dav!id47k@d47.co> (remove the '!')
@@ -34,19 +34,46 @@ typedef int32_t i32;
 
 
 //----------------------------------------------------------------------------
-//  WATCH TYPES
+//  WATCH TYPES EXAMPLES
 //----------------------------------------------------------------------------
 
 typedef struct _WatchType {
-	const char * type;		// Type shown in DA FIT app, and on watch about screen
-	const char * code;		// Type shown on firmware screen
-	const char * tpls;		// Types that is requested from the watch face api
+	const char * type;		// Type shown in DA FIT app, and on watch about screen, example.
+	const char * code;		// Type shown on firmware screen, example. Starts with MOY-
+	const char * tpls;		// Types that are requested from the watch face api
 	u16 width;				// Screen width in pixels
 	u16 height;				// Screen height in pixels
+	char fileType;			// A, B or C
 } WatchType;
 
+/*
+
+fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has row index
+TYPE A 		6				200						No											No
+TYPE B		10				400						Yes											?
+TYPE C 		10				400						No											Yes
+
+*/
+
 WatchType watchTypes[] = {
-	{ "C20", "MOY-QHF3", "33", 240, 280 }
+	{ "???", "???",   "1", 240, 240, 'A' },			// square face
+	{ "???", "???",   "6", 240, 240, 'A' },			// round face
+	{ "???", "???",   "7", 240, 240, 'A' },			// round face
+	{ "???", "???",   "8", 240, 240, 'A' },			// 
+	{ "???", "???",  "13", 240, 240, 'B' },			// 
+	{ "???", "???",  "19", 240, 240, 'B' },			// round face
+	{ "???", "???",  "20", 240, 240, 'B' },			// 
+	{ "???", "???",  "25", 360, 360, 'B' },			// round face
+	{ "???", "???",  "27", 240, 240, 'A' },			// 
+	{ "???", "???",  "28", 240, 240, 'A' },			// 
+	{ "???", "???",  "29", 240, 240, 'A' },			// 
+	{ "???", "???",  "30", 240, 240, 'B' },			// 
+	{ "C20", "QHF3", "33", 240, 280, 'C' },			// 
+	{ "???", "???",  "34", 240, 280, 'B' },			// 
+	{ "???", "???",  "36", 240, 295, 'B' },			// 
+	{ "???", "???",  "38", 240, 240, 'C' },			// round face
+	{ "???", "???",  "39", 240, 240, 'C' },			// square face
+	{ "???", "???",  "40", 320, 385, 'C' },			// round face	
 };
 
 
@@ -89,107 +116,104 @@ uint32_t swapByteOrder4(uint32_t input) {
 //  BMP HEADER
 //----------------------------------------------------------------------------
 
-typedef struct _BMPHeader16 {
+typedef struct _BMPHeaderClassic {
 	u16 sig;				// "BM"												BITMAPFILEHEADER starts here
 	u32 fileSize;			// unreliable - size in bytes of file
 	u16 reserved1;			// 0
 	u16 reserved2;  		// 0
 	u32 offset;				// offset to start of image data 					BITMAPFILEHEADER ends here
-	u32 dibHeaderSize;		// 40 = size of BITMAPINFOHEADER, 105=BITMAPV4HEADER					BITMAPINFOHEADER starts here, BITMAPINFO starts here, BITMAPV4HEADER starts here
+	u32 dibHeaderSize;		// 40 = size of BITMAPINFOHEADER					BITMAPINFOHEADER starts here, BITMAPINFO starts here, BITMAPV4HEADER starts here
 	i32 width;				// pixels
 	i32 height;				// pixels
 	u16 planes;				// 1
-	u16 bpp;				// 1, 4, 8, 24.... or 16?
-	u32 compressionType;	// 0=none(BI_RGB), 1=BI_RLE8; 2=BI_RLE4, 3=BI_BITFIELDS, 4=BI_JPEG, 5=BI_PNG needs to be set to BI_BITFIELDS for our RGB565 format
+	u16 bpp;				// 16
+	u32 compressionType;	// 0=BI_RGB. 3=BI_BITFIELDS. Must be set to BI_BITFIELDS for RGB565 format.
 	u32 imageDataSize;		// including padding
 	u32 hres;				// pixels per metre
 	u32 vres;				// pixels per meter
 	u32 clrUsed;			// colors in image, or 0
 	u32 clrImportant;		// colors in image, or 0							BITMAPINFOHEADER ends here
-	u32 bmiColors[3];		// masks for R, G, B components
-} BMPHeader16;
+	u32 bmiColors[3];		// masks for R, G, B components (for 16bpp)
+} BMPHeaderClassic;
 
-typedef struct _BMPHeader16_V4 {
-	u16 sig;			// "BM"												BITMAPFILEHEADER starts here
-	u32 fileSize;		// unreliable - size in bytes of file
-	u16 reserved1;		// 0
-	u16 reserved2;  	// 0
-	u32 offset;			// offset to start of image data 					BITMAPFILEHEADER ends here
-	u32 dibHeaderSize;	// 40 = size of BITMAPINFOHEADER, 105=BITMAPV4HEADER					BITMAPINFOHEADER starts here, BITMAPINFO starts here, BITMAPV4HEADER starts here
-	i32 width;			// pixels
-	i32 height;			// pixels
-	u16 planes;			// 1
-	u16 bpp;			// 1, 4, 8, 24.... or 16?
-	u32 compressionType;	// 0=none(BI_RGB), 1=BI_RLE8; 2=BI_RLE4, 3=BI_BITFIELDS, 4=BI_JPEG, 5=BI_PNG needs to be set to BI_BITFIELDS for our RGB565 format
-	u32 imageDataSize;	// including padding
-	u32 hres;			// pixels per metre
-	u32 vres;			// pixels per meter
-	u32 clrUsed;		// colors in image, or 0
-	u32 clrImportant;	// colors in image, or 0							BITMAPINFOHEADER ends here
-	u32 RGBAmasks[4];	// masks for R,G,B,A components (if BI_BITFIELDS)		BITMAPINFO ends here
+typedef struct _BMPHeaderV4 {
+	u16 sig;				// "BM"												BITMAPFILEHEADER starts here
+	u32 fileSize;			// unreliable - size in bytes of file
+	u16 reserved1;			// 0
+	u16 reserved2;  		// 0
+	u32 offset;				// offset to start of image data 					BITMAPFILEHEADER ends here
+	u32 dibHeaderSize;		// 108 for BITMAPV4HEADER							BITMAPINFOHEADER starts here, BITMAPINFO starts here, BITMAPV4HEADER starts here
+	i32 width;				// pixels
+	i32 height;				// pixels
+	u16 planes;				// 1
+	u16 bpp;				// 16
+	u32 compressionType;	// 3=BI_BITFIELDS. Must be set to BI_BITFIELDS for RGB565 format.
+	u32 imageDataSize;		// including padding
+	u32 hres;				// pixels per metre
+	u32 vres;				// pixels per meter
+	u32 clrUsed;			// colors in image, or 0
+	u32 clrImportant;		// colors in image, or 0							BITMAPINFOHEADER ends here
+	u32 RGBAmasks[4];		// masks for R,G,B,A components (if BI_BITFIELDS)	BITMAPINFO ends here
 	u32 CSType;
 	u32 bV4Endpoints[9];
 	u32 gammas[3];
-	//u32 bmiColors[3];	// legacy data, probably not needed but just in case
-} BMPHeader16_V4;
+} BMPHeaderV4;
 
-typedef struct _BMPHeader24 {
-	u16 sig;			// "BM"												BITMAPFILEHEADER starts here
-	u32 fileSize;		// unreliable - size in bytes of file
-	u16 reserved1;		// 0
-	u16 reserved2;  	// 0
-	u32 offset;			// offset to start of image data 					BITMAPFILEHEADER ends here
-	u32 dibHeaderSize;	// 40 = size of BITMAPINFOHEADER, 105=BITMAPV4HEADER					BITMAPINFOHEADER starts here, BITMAPINFO starts here, BITMAPV4HEADER starts here
-	i32 width;			// pixels
-	i32 height;			// pixels
-	u16 planes;			// 1
-	u16 bpp;			// 1, 4, 8, 24, ... 16
-	u32 compressionType;	// 0=none(BI_RGB), 1=BI_RLE8; 2=BI_RLE4, 3=BI_BITFIELDS, 4=BI_JPEG, 5=BI_PNG needs to be set to BI_BITFIELDS for our RGB565 format
-	u32 imageDataSize;	// including padding
-	u32 hres;			// pixels per metre
-	u32 vres;			// pixels per meter
-	u32 clrUsed;		// colors in image, or 0
-	u32 clrImportant;	// colors in image, or 0							BITMAPINFOHEADER ends here
-} BMPHeader24;
-
-// Set up a BMP header for an RGB565 16-bit bitmap image
-static void setBMPHeader24(BMPHeader24 * dest, u32 width, u32 height) {
-	memset(dest,0,sizeof(BMPHeader24));
+// Set up a BMP header for a classic RGB565 16-bit bitmap image
+static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, u8 bpp) {
+	// bpp must be 16 or 24
+	// Note: 24bpp images should only dump (dest->offset) bytes of this header, not the whole thing (don't need last 12 bytes)
+	memset(dest,0,sizeof(BMPHeaderClassic));
 	dest->sig = 0x4D42;
-	dest->offset = sizeof(BMPHeader24);
-	dest->dibHeaderSize = 40; //40+32+(3*3*4);
-	dest->width = (i32) width;
-	dest->height = -(i32)height;
-	dest->planes = 1;
-	dest->bpp = 24;
-	dest->compressionType = 0; // BI_BITFIELDS=3
-	u32 rowSize = ((3 * width) + 3) & 0xFFFFFFFC; // must be u32 aligned
-	dest->imageDataSize = rowSize * height;
-	dest->fileSize = dest->imageDataSize + sizeof(BMPHeader24);
-	dest->hres = 2835;	// 72dpi
-	dest->vres = 2835;	// 72dpi
-
-}
-
-// Set up a BMP header for an RGB565 16-bit bitmap image
-static void setBMPHeader16_V4(BMPHeader16_V4 * dest, u32 width, u32 height) {
-	memset(dest,0,sizeof(BMPHeader16_V4));
-	dest->sig = 0x4D42;
-	dest->offset = sizeof(BMPHeader16_V4);
-	dest->dibHeaderSize = 108; //40+32+(3*3*4);
+	if(bpp == 16) {
+		dest->offset = sizeof(BMPHeaderClassic);
+	} else if(bpp == 24) {
+		dest->offset = sizeof(BMPHeaderClassic) - 12;
+	}
+	dest->dibHeaderSize = 40;
 	dest->width = (i32)width;
 	dest->height = -(i32)height;
 	dest->planes = 1;
-	dest->bpp = 16;
-	dest->compressionType = 3; // BI_BITFIELDS=3
-	u32 rowSize = ((2 * width) + 3) & 0xFFFFFFFC; // must be u32 aligned
+	dest->bpp = bpp;
+	if(bpp == 16) {
+		dest->compressionType = 3;					// BI_BITFIELDS=3
+		dest->bmiColors[0] = 0xF800;				// Only relevant for 16bpp
+		dest->bmiColors[1] = 0x07E0;				// Only relevant for 16bpp
+		dest->bmiColors[2] = 0x001F;				// Only relevant for 16bpp
+	} else if(bpp == 24) {
+		dest->compressionType = 0;					// BI_RGB=0
+	}
+	u32 rowSize = (((bpp/8) * width) + 3) & 0xFFFFFFFC;
 	dest->imageDataSize = rowSize * height;
-	dest->fileSize = dest->imageDataSize + sizeof(BMPHeader16_V4);
-	dest->hres = 2835;	// 72dpi
-	dest->vres = 2835;	// 72dpi
-	dest->RGBAmasks[0] = 0xF800;
-	dest->RGBAmasks[1] = 0x07E0;
-	dest->RGBAmasks[2] = 0x001F;	
+	dest->fileSize = dest->imageDataSize + dest->offset;
+	dest->hres = 2835;								// 72dpi
+	dest->vres = 2835;								// 72dpi
+}
+
+// Set up a BMP header for 16 or 24 bpp
+static void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
+	// requires bpp=16 or bpp=24
+	memset(dest,0,sizeof(BMPHeaderV4));
+	dest->sig = 0x4D42;
+	dest->offset = sizeof(BMPHeaderV4);
+	dest->dibHeaderSize = 108; 						// 108 for BITMAPV4HEADER
+	dest->width = (i32)width;
+	dest->height = -(i32)height;
+	dest->planes = 1;
+	dest->bpp = bpp;
+	u32 rowSize = (((bpp/8) * width) + 3) & 0xFFFFFFFC;
+	if(bpp == 16) {
+		dest->compressionType = 3; 						// BI_BITFIELDS=3
+		dest->RGBAmasks[0] = 0xF800;
+		dest->RGBAmasks[1] = 0x07E0;
+		dest->RGBAmasks[2] = 0x001F;	
+	} else if(bpp == 24) {
+		dest->compressionType = 0; 						// BI_RGB=0
+	}
+	dest->imageDataSize = rowSize * height;
+	dest->fileSize = dest->imageDataSize + sizeof(BMPHeaderV4);
+	dest->hres = 2835;								// 72dpi
+	dest->vres = 2835;								// 72dpi
 }
 
 typedef struct _RGBTrip {
@@ -216,53 +240,56 @@ RGBTrip RGB565to888(u16 pixel) {
 //  BINARY FILE STRUCTURE
 //----------------------------------------------------------------------------
 
-typedef struct _FaceData {
-	u8 type;		// u8 of what we are giving dimensions to
-	u8 idx;			// index into offset table
-	u16 x;			// where the data will be displayed, in pixels
-	u16 y;
-	u16 w;
-	u16 h;
-} FaceData; // size is 10d
 
-typedef struct _FaceData8 {
-	u8 type;		// u8 of what we are giving dimensions to
-	u8 idx;			// index into offset table
-	u8 x;			// where the data will be displayed, in pixels
+/* For reference: 
+typedef struct _FaceDataA {
+	u8 type;		
+	u8 x;			
 	u8 y;
 	u8 w;
 	u8 h;
-} FaceData8; // size is 6d
+	u8 idx;			
+} FaceDataA; 				// size is 6 bytes
 
-typedef struct _Type1Header {
-	u8 fileID;		// 0x81h or 0x04 or 0x84... 0x81 is digital, 0x84 has analog components.
-	u8 dataCount;		// how many data objects
-	u8 blobCount;		// how many blob (bitmap) objects
-	u16 faceNumber;		// design number of this face, in this case 0x1E38 or 7736
-	FaceData8 faceData[32];	// sizeof(FaceData) = 6 bytes, where to put face data (time, date, steps, day of week, etc.)
+typedef struct _FaceHeaderA {
+	u8 fileID;	
+	u8 dataCount;
+	u8 blobCount;	
+	u16 faceNumber;	
+	FaceDataA faceData[32];	// sizeof(FaceDataA) = 6 bytes
 	u8 padding[3];	
-	u32 offsets[250];	// offsets of bitmap data for the face. Table starts at 0x0194 (or 0x0190...). Offsets start at the END of the header data i.e. at 0x076C
-	u16 sizes[250];		// sizes of the bitmap data, in bytes.
-} Type1Header;	// size is 0x06A4 (1700d)
+	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 200.
+	u16 sizes[250];		
+} FaceHeaderA;				// size is 1700 bytes
+*/
 
-typedef struct _Type33Header {
-	u8 fileID;		// 0x81h or 0x04 or 0x84... which suggests 3 flags. THere is no 0x80, 0x85, 0x00 though.
-	u8 dataCount;		// how many data objects
-	u8 blobCount;		// how many blob (bitmap) objects
-	u16 faceNumber;		// design number of this face, in this case 0x1E38 or 7736
-	FaceData faceData[39];	// sizeof(FaceData) = 10 bytes, where to put face data (time, date, steps, day of week, etc.)
+typedef struct _FaceData {
+	u8 type;				// type of object we are giving dimensions e.g. hours, day, steps etc.
+	u8 idx;					// index into offset table
+	u16 x;					// where the data will be displayed, in pixels
+	u16 y;
+	u16 w;
+	u16 h;
+} FaceData; 				// size is 10 bytes
+
+typedef struct _FaceHeader {
+	u8 fileID;				// 0x81 or 0x04 or 0x84
+	u8 dataCount;			// how many data objects
+	u8 blobCount;			// how many blob (bitmap) objects
+	u16 faceNumber;			// design number of this face, in this case 0x1E38 or 7736
+	FaceData faceData[39];	// sizeof(FaceData) = 10 bytes
 	u8 padding[5];
-	u32 offsets[250];	// offsets of bitmap data for the face. Table starts at 0x0194 (or 0x0190...). Offsets start at the END of the header data i.e. at 0x076C
-	u16 sizes[250];		// sizes of the bitmap data, in bytes.
-} Type33Header;	// size is 0x076C (1900d)
+	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 400. Offsets start from end of the header data i.e. at 1900
+	u16 sizes[250];			// sizes of the bitmap data, in bytes. Unreliable.
+} FaceHeader;				// size is 1900 bytes
 
-void setHeader(Type33Header * h, const u8 * buf, u8 srcType) {
-	if(srcType != 8 && srcType != 16) {
-		printf("ERROR: Invalid srcType in setHeader!\n");
+void setHeader(FaceHeader * h, const u8 * buf, char fileType) {
+	if(fileType != 'A' && fileType != 'B' && fileType != 'C') {
+		printf("ERROR: Invalid fileType in setHeader!\n");
 		return;
 	}
 	
-	memset(h, 0, sizeof(Type33Header));
+	memset(h, 0, sizeof(FaceHeader));
 
 	h->fileID = buf[0];
 	h->dataCount = buf[1];
@@ -270,14 +297,9 @@ void setHeader(Type33Header * h, const u8 * buf, u8 srcType) {
 	h->faceNumber = get_u16(&buf[3]);
 
 	u32 idx = 5;
-	u32 blockSize = 10;		// larger FaceData struct
-	u32 faceDataCount = 39;
-	if(srcType == 8) {
-		blockSize = 6;		// smaller FaceData struct
-		faceDataCount = 32;
-	}
 	
-	if(srcType == 16) {
+	// load faceData
+	if(fileType != 'A') {
 		for(int i=0; i<39; i++) {
 			h->faceData[i].type = buf[idx];
 			h->faceData[i].idx = buf[idx+1];
@@ -289,7 +311,7 @@ void setHeader(Type33Header * h, const u8 * buf, u8 srcType) {
 		}
 		memcpy(h->padding, &buf[idx], 5);
 		idx += 5;
-	} else { // srcType == 8
+	} else { // fileType == 'A'
 		for(int i=0; i<32; i++) {
 			h->faceData[i].type = buf[idx];
 			h->faceData[i].idx = buf[idx+5];
@@ -301,17 +323,21 @@ void setHeader(Type33Header * h, const u8 * buf, u8 srcType) {
 		}
 		memcpy(h->padding, &buf[idx], 3);
 		idx += 3;
-
 	}
 	
+	// load offsets
 	for(int i=0; i<250; i++) {
 		h->offsets[i] = get_u32(&buf[idx]);
 		idx += 4;
 	}
+
+	// load sizes
 	for(int i=0; i<250; i++) {
 		h->sizes[i] = get_u16(&buf[idx]);
 		idx += 2;
 	}
+
+	// Note: if fileType == 'B', offsets are into the *decompressed* data. 
 }
 
 //----------------------------------------------------------------------------
@@ -326,10 +352,10 @@ typedef struct _DataType {
 
 // digits: only w, h of first digit. 0-9.
 const DataType dataTypes[] = {	
-	{ 0x00, "BACKGROUNDS", 10 },		// Split into 10 parts of 240x24 each. Often numbers are in it, just overwritten.
-	{ 0x01, "BACKGROUND", 1 },			// Background image, usually of full width and height of screen, usually the first item
+	{ 0x00, "BACKGROUNDS", 10 },		// Split into 10 parts of 240x24 each. Often example time is in it, just overwritten. Typical in Type A watch faces.
+	{ 0x01, "BACKGROUND", 1 },			// Background image, usually of full width and height of screen, usually the first item. Typical in Type B & C watch faces.
 	{ 0x10, "MONTH_NAME", 12 },			// JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, DEC 	
-	{ 0x11, "MONTH_NUM", 10 },			// digits 
+	{ 0x11, "MONTH_NUM", 10 },			// month, digits.
 	{ 0x12, "YEAR", 10 },				// year, 2 digits, left aligned 
 	{ 0x30, "DAY_NUM", 10 },			// Day number of the month. digits
 	{ 0x40, "TIME_H1", 10 },			// Hh:mm
@@ -413,7 +439,7 @@ int getDataTypeIdx(u8 type) {
 }
 
 // Find the faceData index given an offset index
-int getFaceDataIndexFromOffsetIndex(int offsetIndex, Type33Header * h) {
+int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h) {
 	int fdi = 0;
 	int matchIdx = -1;
 	for(fdi=0; fdi < h->dataCount; fdi++) {
@@ -469,123 +495,22 @@ int dumpBlob(char * filename, u8 * srcData, size_t length) {
 //  DUMPBMP - dump binary data to bitmap file
 //----------------------------------------------------------------------------
 
-int dumpBMP24Raw(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight) {	
-	// file is a raw bitmap, of 16bpp, with width,height
-	BMPHeader24 bmpHeader;
-	setBMPHeader24(&bmpHeader, imgWidth, imgHeight);
-
-	// row width is equal to imageDataSize / imgHeight
-	u32 destRowSize = bmpHeader.imageDataSize / imgHeight;
-
-	u8 buf[8192];
-	if(destRowSize > sizeof(buf)) {
-		printf("Image width exceeds buffer size!\n");
-		return 3;
+/* For 24bpp:
+	for(u32 x=0; x<imgWidth; x++) {
+		RGBTrip pixel = RGB565to888(get_u16(&srcPtr[2*x]));
+		buf[3*x] = pixel.r;
+		buf[3*x+1] = pixel.g;
+		buf[3*x+2] = pixel.b;
 	}
-
-	// open the dump file
-	FILE * dumpFile = fopen(filename,"wb");
-	if(dumpFile==NULL) {
-		return 1;
-	}
-
-	// write the header 	
-	size_t rval = fwrite(&bmpHeader,1,sizeof(bmpHeader),dumpFile);
-	if(rval != sizeof(bmpHeader)) {
-		fclose(dumpFile);
-		return 2;
-	}
-
-	// for each row
-	const u32 srcRowSize = imgWidth * 2;
-	size_t srcIdx = 0;
-	for(u32 y=0; y<imgHeight; y++) {
-		memset(buf,0,destRowSize);
-		//u16 * srcPtr = (u16 *)&srcData[srcIdx];
-		u8 * srcPtr = &srcData[srcIdx];
-		// for each pixel
-		for(u32 x=0; x<imgWidth; x++) {
-			RGBTrip pixel = RGB565to888(get_u16(&srcPtr[2*x]));
-			buf[3*x] = pixel.r;
-			buf[3*x+1] = pixel.g;
-			buf[3*x+2] = pixel.b;
-		}
-
-		rval = fwrite(buf,1,destRowSize,dumpFile);
-		if(rval != destRowSize) {
-			fclose(dumpFile);
-			return 2;
-		}
-		srcIdx += srcRowSize;
-	}
-
-	// close the dump file
-	fclose(dumpFile);
-
-	return 0; // SUCCESS
-}
-
-int dumpBMP16Raw(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight) {	
-	// file is a raw bitmap, of 16bpp, with width,height
-	BMPHeader16_V4 bmpHeader;
-	setBMPHeader16_V4(&bmpHeader, imgWidth, imgHeight);
-
-	// row width is equal to imageDataSize / imgHeight
-	u32 destRowSize = bmpHeader.imageDataSize / imgHeight;
-
-	u8 buf[8192];
-	if(destRowSize > sizeof(buf)) {
-		printf("Image width exceeds buffer size!\n");
-		return 3;
-	}
-
-	// open the dump file
-	FILE * dumpFile = fopen(filename,"wb");
-	if(dumpFile==NULL) {
-		return 1;
-	}
-
-	// write the header 	
-	size_t rval = fwrite(&bmpHeader,1,sizeof(bmpHeader),dumpFile);
-	if(rval != sizeof(bmpHeader)) {
-		fclose(dumpFile);
-		return 2;
-	}
-
-	// for each row
-	const u32 srcRowSize = imgWidth * 2;
-	size_t srcIdx = 0;
-	for(u32 y=0; y<imgHeight; y++) {
-		memset(buf,0,destRowSize);
-		//u16 * srcPtr = (u16 *)&srcData[srcIdx];
-		u8 * srcPtr = &srcData[srcIdx];
-		// for each pixel
-		for(u32 x=0; x<imgWidth; x++) {
-			u16 pixel = swapByteOrder2(get_u16(&srcPtr[x*2]));
-			buf[2*x] = pixel & 0xFF;
-			buf[2*x+1] = pixel >> 8;
-		}
-
-		rval = fwrite(buf,1,destRowSize,dumpFile);
-		if(rval != destRowSize) {
-			return 2;
-		}
-		srcIdx += srcRowSize;
-	}
-
-	// close the dump file
-	fclose(dumpFile);
-
-	return 0; // SUCCESS
-}
+*/
 
 int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 oldRLE) {	
 	// Check if this bitmap has the RLE encoded identifier
 	u16 identifier = get_u16(&srcData[0]);
 	int isRLE = (identifier == 0x2108);
 
-	BMPHeader16_V4 bmpHeader;
-	setBMPHeader16_V4(&bmpHeader, imgWidth, imgHeight);
+	BMPHeaderV4 bmpHeader;
+	setBMPHeaderV4(&bmpHeader, imgWidth, imgHeight, 16);
 
 	// row width is equal to imageDataSize / imgHeight
 	u32 destRowSize = bmpHeader.imageDataSize / imgHeight;
@@ -609,7 +534,8 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 		return 2;
 	}
 
-	if(isRLE && !oldRLE) {		
+	if(isRLE && !oldRLE) {
+		// The newer RLE style has a table at the start with the offsets of each row.
 		u8 * lineEndOffset = &srcData[2];
 		size_t srcIdx = (2 * imgHeight) + 2; // offset from start of RLEImage to RLEData
 
@@ -711,7 +637,60 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 	return 0; // SUCCESS
 }
 
+//---
+//  AUTODETECT FILE TYPE
+//---
 
+char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect file type.
+	u8 blobCount = fileData[2];
+	int typeACount = 1;
+	u8 typeARunning = 1;
+	int typeBCount = 1;
+	u8 typeBRunning = 1;
+	u32 typeBMax = 0;
+	char fileType = 0;
+
+	// Count the offsets and compare to blobCount. Type A offset table starts at 200. Type B/C offset table starts at 400.
+	for(u32 i=1; i<250; i++) {
+		if(typeARunning) {
+			if(get_u32(&fileData[200+(i*4)]) != 0) {
+				typeACount += 1;
+			} else {
+				typeARunning = 0;
+			}
+		}
+		if(typeBRunning) {
+			u32 offset = get_u32(&fileData[400+(i*4)]);
+			if(offset != 0) {
+				typeBCount += 1;
+				typeBMax = offset;
+			} else {
+				typeBRunning = 0;
+			}
+		}
+	}		
+
+	if(typeACount == blobCount) {
+		printf("Autodetected fileType A\n");
+		fileType = 'A';			
+	} else if(typeBCount == blobCount) {
+		typeBMax += 1900; // add header size
+		// Type B will have offsets larger than the file size (as they are into the uncompressed data). Type C should be smaller than the file size.
+		if(typeBMax > fileSize) {
+			printf("Autodetected fileType B\n");
+			// (offset %u is greater than fileSize %zu)\n", typeBMax, fileSize);
+			fileType = 'B';
+		} else {
+			printf("Autodetected fileType C\n");
+			// (offset %u is less than fileSize %zu)\n", typeBMax, fileSize);
+			fileType = 'C';
+		}
+	} else {
+		printf("WARNING: Unable to autodetect fileType. Defaulting to type C.\n");
+		fileType = 'C';
+	}
+	return fileType;
+}
 
 //----------------------------------------------------------------------------
 //  MAIN
@@ -747,7 +726,7 @@ int main(int argc, char * argv[]) {
 		printf("\t%s\n","folder=FOLDERNAME      Folder to dump data to/read from. Defaults to the face design number.");
 		printf("\t%s\n","                       Required for mode=create.");
 		printf("\t%s\n","raw=true               When dumping, dump raw files. Default is false.");
-		printf("\t%s\n","type=8                 Specify to read binary file using smaller header (for device resolution <255 x <255)");
+		printf("\t%s\n","fileType=8             Specify type of binary file (A, B or C)");
 		printf("\n");
 		return 0;
     }
@@ -761,7 +740,7 @@ int main(int argc, char * argv[]) {
 		CREATE
 	} mode = INFO;
 	u8 raw = 0;
-	u8 type = 16;
+	char fileType = 0;
     
 	// read command-line parameters
 	for(int i=1; i<argc; i++) {
@@ -784,12 +763,14 @@ int main(int argc, char * argv[]) {
 		} else if(strncmp(argv[i], "raw=", 4)==0) {
 			printf("ERROR: Invalid raw=\n");
 			return 1;
-		} else if(strncmp(argv[i], "type=8", 6)==0) {
-			type = 8;
-		} else if(strncmp(argv[i], "type=16", 7)==0) {
-			type = 16;
-		} else if(strncmp(argv[i], "type=", 5)==0) {
-			printf("ERROR: Invalid type=\n");
+		} else if(strncmp(argv[i], "fileType=A", 10)==0) {
+			fileType = 'A';
+		} else if(strncmp(argv[i], "fileType=B", 10)==0) {
+			fileType = 'B';
+		} else if(strncmp(argv[i], "fileType=C", 10)==0) {
+			fileType = 'C';
+		} else if(strncmp(argv[i], "fileType=", 9)==0) {
+			printf("ERROR: Invalid fileType=\n");
 			return 1;
 		} else if(strncmp(argv[i],"folder=",7)==0) {
 			foldername = &argv[i][7];
@@ -798,12 +779,6 @@ int main(int argc, char * argv[]) {
 			filename=argv[i];
 		}
 	}		
-
-	// determine header size
-	u32 headerSize = 1900;
-	if(type == 8) {
-		headerSize = 1700;
-	}
 
 	// Check if we are in CREATE mode
 	if(mode==CREATE) {
@@ -824,11 +799,13 @@ int main(int argc, char * argv[]) {
     fseek(f,0,SEEK_END);
 	long ftr = ftell(f);
 	fseek(f,0,SEEK_SET);
-	if(ftr < headerSize) {
-		printf("ERROR: File is less than the header size (1900 bytes)!\n");
+
+	if(ftr < 1700) {
+		printf("ERROR: File is less than the minimum header size (1700 bytes)!\n");
 		fclose(f);
 		return 1;
 	}
+
 	size_t fileSize = (size_t)ftr;
 
 	// Allocate buffer and read whole file
@@ -852,21 +829,38 @@ int main(int argc, char * argv[]) {
 	if(fileData[0] != 0x81 && fileData[0] != 0x04 && fileData[0] != 0x84) {
 		printf("WARNING: Unknown fileID: 0x%02x\n", fileData[0]);
 	}
-	
+
+	// Autodetect file type, if unspecified.
+	if(fileType==0) {
+		fileType = autodetectFileType(fileData, fileSize);
+	}
+
+	// determine header size
+	u32 headerSize = 1900;
+	if(fileType == 'A') {
+		headerSize = 1700;
+	}
+
+	if(fileSize < headerSize) {
+		printf("ERROR: File is less than the header size (%u bytes)!\n", headerSize);
+		fclose(f);
+		return 1;
+	}
+
 	// store discovered data in string, for saving to file, so we can recreate this bin file
 	char watchFaceStr[(39+5)*100] = "";		// have enough room for all the lines we need to store
 	char lineBuf[128] = "";
 
-	snprintf(lineBuf, sizeof(lineBuf), "type           %u\n", type);
+	snprintf(lineBuf, sizeof(lineBuf), "fileType       %c\n", fileType);
 	strcat(watchFaceStr, lineBuf);
 
 	snprintf(lineBuf, sizeof(lineBuf), "fileID         0x%02x\n", fileData[0]);
 	strcat(watchFaceStr, lineBuf);
 
 	// Print header info
-	Type33Header header;
-	Type33Header * h = &header;
-	setHeader(&header, fileData, type);
+	FaceHeader header;
+	setHeader(&header, fileData, fileType);
+	FaceHeader * h = &header;
 
 	snprintf(lineBuf, sizeof(lineBuf), "dataCount      %u\n", h->dataCount);
 	strcat(watchFaceStr, lineBuf);
@@ -879,6 +873,7 @@ int main(int argc, char * argv[]) {
 
 	// Print faceData header info
 	FaceData * background = NULL;
+	FaceData * backgrounds = NULL;
 	int myDataCount = 0;
 	for(u32 i=0; i<(sizeof(h->faceData)/sizeof(h->faceData[0])); i++) {
 		if(h->faceData[i].type != 0 || i==0) {		// some formats use type 0 in position 0 as background
@@ -891,14 +886,17 @@ int main(int argc, char * argv[]) {
 			if(fd->type == 0x01 && background == NULL) {
 				background = &h->faceData[i];
 			}
+			if(fd->type == 0x00 && backgrounds == NULL) {
+				backgrounds = &h->faceData[i];
+			}
 		}
 	}
 	int fail = 0;
 
 	printf("%s", watchFaceStr);		// display all the important data
 
-	if(background == NULL && type==16) {
-		printf("WARNING: No background (type 0x01) found.\n");
+	if(background == NULL && backgrounds == NULL) {
+		printf("WARNING: No background found.\n");
 	}
 
 	if(myDataCount != h->dataCount) {
@@ -912,8 +910,8 @@ int main(int argc, char * argv[]) {
 	for(u32 i=1; i<250; i++) {
 		if(h->offsets[i] != 0) {
 			offsetCount += 1;
-			if(h->offsets[i] >= fileSize) {
-				printf("ERROR: Offset %u is greater than file size, cannot dump this file.\n", h->offsets[i]);
+			if(h->offsets[i] >= fileSize && fileType != 'B') {
+				printf("ERROR: Offset %u is greater than file size, cannot dump this file.\n", h->offsets[i]);	// Unknown file type
 				fail = 1;
 			}
 		} 
@@ -929,22 +927,6 @@ int main(int argc, char * argv[]) {
 		printf("WARNING: offsetCount != blobCount!\n");
 	}
 
-	// Sanity checks on background image
-	if(background != NULL) {
-		if(background->type != 1) {
-			printf("WARNING: background type is not 1!\n");
-		}
-		if(background->idx != 0) {
-			printf("WARNING: background idx is not 0!\n");
-		}
-		if(background->x != 0 || background->y != 0) {
-			printf("WARNING: background x,y is not 0,0!\n");
-		}
-		if((background->w != 240 || background->h != 280) && type == 16) {
-			printf("WARNING: background height and width unexpected (looking for 240x280)\n");
-		}
-	}
-
 	u8 nothing[5] = { 0, 0, 0, 0, 0 };
 	if(memcmp(h->padding, nothing, 5) != 0) {
 		printf("WARNING: padding are not 0!\n");
@@ -952,6 +934,13 @@ int main(int argc, char * argv[]) {
 
 	// Check if we are in DUMP mode
 	if(mode==DUMP) {
+		if(fileType == 'B') {
+			// What compression method is used in type B files?
+			printf("Dumping from fileType B is not supported\n");
+			free(fileData);
+			return 1;
+		}
+
 		char dumpFileName[1024];
 		char * folderStr;
 		char faceNumberStr[16];
@@ -1020,7 +1009,12 @@ int main(int argc, char * argv[]) {
 
 				if(length == 0) {
 					printf("WARNING: Unable to determine length for blob idx %04d, not dumping raw data.\n", i);
-				} else {			
+				} else {
+					// check it won't go past EOF
+					if(fileOffset + length > fileSize) {
+						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+length, fileSize);
+						continue;
+					}
 					// assemble file name to dump to
 					snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, slash, i);
 					printf("Dumping RAW length %6zu to file %s\n", length ,dumpFileName);
@@ -1035,7 +1029,7 @@ int main(int argc, char * argv[]) {
 
 			// Dump the bitmaps
 			if(fdi != -1) {
-				if(dataTypes[fdi].type==0x00 && (type==8) && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
+				if(dataTypes[fdi].type==0x00 && (fileType=='A') && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
 					// override width and height
 					h->faceData[fdi].w = 240;
 					h->faceData[fdi].h = 24;
@@ -1043,12 +1037,12 @@ int main(int argc, char * argv[]) {
 				}
 				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, slash, i);
 				printf("Dumping BMP               to file %s\n",  dumpFileName);
-				dumpBMP16(dumpFileName, &fileData[fileOffset], h->faceData[fdi].w, h->faceData[fdi].h, (type==8));
+				dumpBMP16(dumpFileName, &fileData[fileOffset], h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
 			} else if(i == (offsetCount - 1)) {
 				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
 				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, slash, i);
 				printf("Dumping BMP               to file %s\n", dumpFileName);
-				dumpBMP16(dumpFileName, &fileData[fileOffset], 140, 163, (type==8));
+				dumpBMP16(dumpFileName, &fileData[fileOffset], 140, 163, (fileType=='A'));
 			}
 		}
 	}
