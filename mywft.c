@@ -686,8 +686,8 @@ char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect file t
 			fileType = 'C';
 		}
 	} else {
-		printf("WARNING: Unable to autodetect fileType. Defaulting to type C.\n");
-		fileType = 'C';
+		printf("WARNING: Unable to autodetect fileType. Defaulting to type A.\n");
+		fileType = 'A';
 	}
 	return fileType;
 }
@@ -910,7 +910,7 @@ int main(int argc, char * argv[]) {
 	for(u32 i=1; i<250; i++) {
 		if(h->offsets[i] != 0) {
 			offsetCount += 1;
-			if(h->offsets[i] >= fileSize && fileType != 'B') {
+			if(h->offsets[i] >= fileSize && fileType != 'B' && !fail) {
 				printf("ERROR: Offset %u is greater than file size, cannot dump this file.\n", h->offsets[i]);	// Unknown file type
 				fail = 1;
 			}
