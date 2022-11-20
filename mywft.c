@@ -89,9 +89,8 @@ static u32 get_u32(const u8 * ptr) {			// gets a LE u32, without care for alignm
 	return ptr[0] | (u32)( ptr[1] << 8 ) | (u32)( ptr[2] << 16 ) | (u32)( ptr[3] << 24 );
 }
 
-static int systemIsLittleEndian() {
+static int systemIsLittleEndian() {				// return 0 for big endian, 1 for little endian.
     volatile uint32_t i=0x01234567;
-    // return 0 for big endian, 1 for little endian.
     return (*((volatile uint8_t*)(&i))) == 0x67;
 }
 
@@ -159,9 +158,8 @@ typedef struct _BMPHeaderV4 {
 	u32 gammas[3];
 } BMPHeaderV4;
 
-// Set up a BMP header for a classic RGB565 16-bit bitmap image
+// Set up a BMP header. bpp must be 16 or 24.
 static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, u8 bpp) {
-	// bpp must be 16 or 24
 	// Note: 24bpp images should only dump (dest->offset) bytes of this header, not the whole thing (don't need last 12 bytes)
 	*dest = (BMPHeaderClassic){ 0 };
 	dest->sig = 0x4D42;
@@ -170,16 +168,16 @@ static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, 
 	} else if(bpp == 24) {
 		dest->offset = sizeof(BMPHeaderClassic) - 12;
 	}
-	dest->dibHeaderSize = 40;
+	dest->dibHeaderSize = 40;						// 40 for BITMAPINFOHEADER
 	dest->width = (i32)width;
 	dest->height = -(i32)height;
 	dest->planes = 1;
 	dest->bpp = bpp;
 	if(bpp == 16) {
 		dest->compressionType = 3;					// BI_BITFIELDS=3
-		dest->bmiColors[0] = 0xF800;				// Only relevant for 16bpp
-		dest->bmiColors[1] = 0x07E0;				// Only relevant for 16bpp
-		dest->bmiColors[2] = 0x001F;				// Only relevant for 16bpp
+		dest->bmiColors[0] = 0xF800;				
+		dest->bmiColors[1] = 0x07E0;				
+		dest->bmiColors[2] = 0x001F;				
 	} else if(bpp == 24) {
 		dest->compressionType = 0;					// BI_RGB=0
 	}
@@ -190,9 +188,8 @@ static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, 
 	dest->vres = 2835;								// 72dpi
 }
 
-// Set up a BMP header for 16 or 24 bpp
+// Set up a BMP header. bpp must be 16 or 24.
 static void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
-	// requires bpp=16 or bpp=24
 	*dest = (BMPHeaderV4){ 0 };
 	dest->sig = 0x4D42;
 	dest->offset = sizeof(BMPHeaderV4);
@@ -203,12 +200,12 @@ static void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
 	dest->bpp = bpp;
 	u32 rowSize = (((bpp/8) * width) + 3) & 0xFFFFFFFC;
 	if(bpp == 16) {
-		dest->compressionType = 3; 						// BI_BITFIELDS=3
+		dest->compressionType = 3; 					// BI_BITFIELDS=3
 		dest->RGBAmasks[0] = 0xF800;
 		dest->RGBAmasks[1] = 0x07E0;
 		dest->RGBAmasks[2] = 0x001F;	
 	} else if(bpp == 24) {
-		dest->compressionType = 0; 						// BI_RGB=0
+		dest->compressionType = 0; 					// BI_RGB=0
 	}
 	dest->imageDataSize = rowSize * height;
 	dest->fileSize = dest->imageDataSize + sizeof(BMPHeaderV4);
@@ -222,16 +219,15 @@ typedef struct _RGBTrip {
 	u8 b;
 } RGBTrip;
 
-static RGBTrip RGB565to888(u16 pixel) {
-	// need to reverse the source pixel
-	pixel = swapByteOrder2(pixel);
+static RGBTrip RGB565to888(u16 pixel) {	
+	pixel = swapByteOrder2(pixel);				// need to reverse the source pixel
 	RGBTrip output;
 	output.r = (u8)((pixel & 0x001F) << 3);		// first 5 bits
-	output.r |= (pixel & 0x001C) >> 3;		// add extra precision of 3 bits
-	output.g = (pixel & 0x07E0) >> 3;		// first 6 bits
-	output.g |= (pixel & 0x0600) >> 9;		// add extra precision of 2 bits
-	output.b = (pixel & 0xF800) >> 8;		// first 5 bits
-	output.b |= (pixel & 0xE000) >> 13;		// add extra precision of 3 bits
+	output.r |= (pixel & 0x001C) >> 3;			// add extra precision of 3 bits
+	output.g = (pixel & 0x07E0) >> 3;			// first 6 bits
+	output.g |= (pixel & 0x0600) >> 9;			// add extra precision of 2 bits
+	output.b = (pixel & 0xF800) >> 8;			// first 5 bits
+	output.b |= (pixel & 0xE000) >> 13;			// add extra precision of 3 bits
 	return output;
 }
 
@@ -243,12 +239,12 @@ static RGBTrip RGB565to888(u16 pixel) {
 
 /* For reference: 
 typedef struct _FaceDataA {
-	u8 type;		
+	u8 type;				// type of object we are giving dimensions e.g. hours, day, steps etc.
 	u8 x;			
 	u8 y;
 	u8 w;
 	u8 h;
-	u8 idx;			
+	u8 idx;					// index into offset table
 } FaceDataA; 				// size is 6 bytes
 
 typedef struct _FaceHeaderA {
@@ -258,15 +254,15 @@ typedef struct _FaceHeaderA {
 	u16 faceNumber;	
 	FaceDataA faceData[32];	// sizeof(FaceDataA) = 6 bytes
 	u8 padding[3];	
-	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 200.
-	u16 sizes[250];		
+	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 200. Offsets start from end of header data i.e. at 1700.
+	u16 sizes[250];			// sizes of the bitmap data, in bytes. Unreliable.
 } FaceHeaderA;				// size is 1700 bytes
 */
 
 typedef struct _FaceData {
 	u8 type;				// type of object we are giving dimensions e.g. hours, day, steps etc.
 	u8 idx;					// index into offset table
-	u16 x;					// where the data will be displayed, in pixels
+	u16 x;
 	u16 y;
 	u16 w;
 	u16 h;
@@ -279,8 +275,8 @@ typedef struct _FaceHeader {
 	u16 faceNumber;			// design number of this face, in this case 0x1E38 or 7736
 	FaceData faceData[39];	// sizeof(FaceData) = 10 bytes
 	u8 padding[5];
-	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 400. Offsets start from end of the header data i.e. at 1900
-	u16 sizes[250];			// sizes of the bitmap data, in bytes. Unreliable.
+	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 400. Offsets start from end of header data i.e. at 1900.
+	u16 sizes[250];			// sizes of the bitmap data, in bytes. For Type B, sizes are the uncompressed sizes. Unreliable. 
 } FaceHeader;				// size is 1900 bytes
 
 static void setHeader(FaceHeader * h, const u8 * buf, char fileType) {
@@ -637,9 +633,9 @@ static int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight,
 	return 0; // SUCCESS
 }
 
-//---
+//----------------------------------------------------------------------------
 //  AUTODETECT FILE TYPE
-//---
+//----------------------------------------------------------------------------
 
 static char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect file type.
 	u8 blobCount = fileData[2];
