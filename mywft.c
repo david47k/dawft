@@ -14,11 +14,11 @@
 
 */
 
+#include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/stat.h>		// for mkdir()
-#include <string.h>
 
 #pragma pack(1)
 
@@ -55,7 +55,7 @@ TYPE C 		10				400						No											Yes
 
 */
 
-WatchType watchTypes[] = {
+static WatchType watchTypes[] = {
 	{ "???", "???",   "1", 240, 240, 'A' },			// square face
 	{ "???", "???",   "6", 240, 240, 'A' },			// round face
 	{ "???", "???",   "7", 240, 240, 'A' },			// round face
@@ -82,27 +82,27 @@ WatchType watchTypes[] = {
 //----------------------------------------------------------------------------
 
 static u16 get_u16(const u8 * ptr) {			// gets a LE u16, without care for alignment or system byte order
-	return ( (u8)ptr[0] ) | ( (u8)ptr[1] << 8 );
+	return ptr[0] | (u16)( ptr[1] << 8 );
 }
 
 static u32 get_u32(const u8 * ptr) {			// gets a LE u32, without care for alignment or system byte order
-	return ( (u8)ptr[0] ) | ( (u8)ptr[1] << 8 ) | ( (u8)ptr[2] << 16 ) | ( (u8)ptr[3] << 24 );
+	return ptr[0] | (u32)( ptr[1] << 8 ) | (u32)( ptr[2] << 16 ) | (u32)( ptr[3] << 24 );
 }
 
-int systemIsLittleEndian() {
+static int systemIsLittleEndian() {
     volatile uint32_t i=0x01234567;
     // return 0 for big endian, 1 for little endian.
-    return (*((uint8_t*)(&i))) == 0x67;
+    return (*((volatile uint8_t*)(&i))) == 0x67;
 }
 
-uint16_t swapByteOrder2(uint16_t input) {
-    uint16_t output = (input&0xFF)<<8;
+static uint16_t swapByteOrder2(uint16_t input) {
+    uint16_t output = (uint16_t)((input & 0xFF) << 8);
     output |= (input&0xFF00)>>8;
     return output;
 }
 
 
-uint32_t swapByteOrder4(uint32_t input) {
+static uint32_t swapByteOrder4(uint32_t input) {
 	uint32_t output = 0;
     output |= (input&0x000000FF) << 24;
     output |= (input&0x0000FF00) <<  8;
@@ -163,7 +163,7 @@ typedef struct _BMPHeaderV4 {
 static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, u8 bpp) {
 	// bpp must be 16 or 24
 	// Note: 24bpp images should only dump (dest->offset) bytes of this header, not the whole thing (don't need last 12 bytes)
-	memset(dest,0,sizeof(BMPHeaderClassic));
+	*dest = (BMPHeaderClassic){ 0 };
 	dest->sig = 0x4D42;
 	if(bpp == 16) {
 		dest->offset = sizeof(BMPHeaderClassic);
@@ -193,7 +193,7 @@ static void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, 
 // Set up a BMP header for 16 or 24 bpp
 static void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
 	// requires bpp=16 or bpp=24
-	memset(dest,0,sizeof(BMPHeaderV4));
+	*dest = (BMPHeaderV4){ 0 };
 	dest->sig = 0x4D42;
 	dest->offset = sizeof(BMPHeaderV4);
 	dest->dibHeaderSize = 108; 						// 108 for BITMAPV4HEADER
@@ -222,11 +222,11 @@ typedef struct _RGBTrip {
 	u8 b;
 } RGBTrip;
 
-RGBTrip RGB565to888(u16 pixel) {
+static RGBTrip RGB565to888(u16 pixel) {
 	// need to reverse the source pixel
 	pixel = swapByteOrder2(pixel);
 	RGBTrip output;
-	output.r = (pixel & 0x001F) << 3;		// first 5 bits
+	output.r = (u8)((pixel & 0x001F) << 3);		// first 5 bits
 	output.r |= (pixel & 0x001C) >> 3;		// add extra precision of 3 bits
 	output.g = (pixel & 0x07E0) >> 3;		// first 6 bits
 	output.g |= (pixel & 0x0600) >> 9;		// add extra precision of 2 bits
@@ -283,13 +283,13 @@ typedef struct _FaceHeader {
 	u16 sizes[250];			// sizes of the bitmap data, in bytes. Unreliable.
 } FaceHeader;				// size is 1900 bytes
 
-void setHeader(FaceHeader * h, const u8 * buf, char fileType) {
+static void setHeader(FaceHeader * h, const u8 * buf, char fileType) {
 	if(fileType != 'A' && fileType != 'B' && fileType != 'C') {
 		printf("ERROR: Invalid fileType in setHeader!\n");
 		return;
 	}
 	
-	memset(h, 0, sizeof(FaceHeader));
+	*h = (FaceHeader){ 0 };
 
 	h->fileID = buf[0];
 	h->dataCount = buf[1];
@@ -351,7 +351,7 @@ typedef struct _DataType {
 } DataType;
 
 // digits: only w, h of first digit. 0-9.
-const DataType dataTypes[] = {	
+static const DataType dataTypes[] = {	
 	{ 0x00, "BACKGROUNDS", 10 },		// Split into 10 parts of 240x24 each. Often example time is in it, just overwritten. Typical in Type A watch faces.
 	{ 0x01, "BACKGROUND", 1 },			// Background image, usually of full width and height of screen, usually the first item. Typical in Type B & C watch faces.
 	{ 0x10, "MONTH_NAME", 12 },			// JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, DEC 	
@@ -416,9 +416,9 @@ const DataType dataTypes[] = {
 	{ 0xF8, "SPACEMAN", 21 },			// 21-frame animation. #3085, #3086, #3248.  #3112 has it as a 14-frame animation.
 };		
 								
-const char dataTypeStrUnknown[12] = "UNKNOWN";
+static const char dataTypeStrUnknown[12] = "UNKNOWN";
 
-const char * getDataTypeStr(u8 type) {
+static const char * getDataTypeStr(u8 type) {
 	int length = sizeof(dataTypes) / sizeof(DataType);
 	for(int i=0; i<length; i++) {
 		if(dataTypes[i].type == type) {
@@ -428,7 +428,7 @@ const char * getDataTypeStr(u8 type) {
 	return dataTypeStrUnknown;
 }
 
-int getDataTypeIdx(u8 type) {
+static int getDataTypeIdx(u8 type) {
 	int length = sizeof(dataTypes) / sizeof(DataType);
 	for(int i=0; i<length; i++) {
 		if(dataTypes[i].type == type) {
@@ -439,7 +439,7 @@ int getDataTypeIdx(u8 type) {
 }
 
 // Find the faceData index given an offset index
-int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h) {
+static int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h) {
 	int fdi = 0;
 	int matchIdx = -1;
 	for(fdi=0; fdi < h->dataCount; fdi++) {
@@ -461,7 +461,7 @@ int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h) {
 //  DUMPBLOB - dump binary data to file
 //----------------------------------------------------------------------------
 
-int dumpBlob(char * filename, u8 * srcData, size_t length) {
+static int dumpBlob(char * filename, u8 * srcData, size_t length) {
 	// open the dump file
 	FILE * dumpFile = fopen(filename,"wb");
 	if(dumpFile==NULL) {
@@ -504,7 +504,7 @@ int dumpBlob(char * filename, u8 * srcData, size_t length) {
 	}
 */
 
-int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 oldRLE) {	
+static int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 oldRLE) {	
 	// Check if this bitmap has the RLE encoded identifier
 	u16 identifier = get_u16(&srcData[0]);
 	int isRLE = (identifier == 0x2108);
@@ -541,7 +541,7 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 
 		// for each row
 		for(u32 y=0; y<imgHeight; y++) {
-			memset(buf,0,destRowSize);
+			memset(buf, 0, destRowSize);
 			u32 bufIdx = 0;
 
 			//printf("line %d, srcIdx %lu, lineEndOffset %d, first color 0x%04x, first count %d\n", y, srcIdx, lineEndOffset[y], 0, srcData[srcIdx+2]);
@@ -572,7 +572,7 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 		u8 pixel1 = 0;
 		u8 count = 0;
 		for(u32 y=0; y<imgHeight; y++) {
-			memset(buf,0,destRowSize);
+			memset(buf, 0, destRowSize);
 			u32 pixelCount = 0;
 			u32 i = 0;
 			if(count > 0) {
@@ -614,7 +614,7 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 		const u32 srcRowSize = imgWidth * 2;
 		size_t srcIdx = 0;
 		for(u32 y=0; y<imgHeight; y++) {
-			memset(buf,0,destRowSize);
+			memset(buf, 0, destRowSize);
 			u8 * srcPtr = &srcData[srcIdx];
 			// for each pixel
 			for(u32 x=0; x<imgWidth; x++) {
@@ -641,7 +641,7 @@ int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight, u8 old
 //  AUTODETECT FILE TYPE
 //---
 
-char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect file type.
+static char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect file type.
 	u8 blobCount = fileData[2];
 	int typeACount = 1;
 	u8 typeARunning = 1;

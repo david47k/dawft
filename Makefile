@@ -1,9 +1,9 @@
-CC=gcc
-CLANG=clang
-CLANGFLAGS = -Weverything
-WIN32CC=i686-w64-mingw32-gcc
-WIN64CC=x86_64-w64-mingw32-gcc
-CFLAGS = -s -Wall -Wpedantic
+CC=clang
+GCC=gcc
+CFLAGS = -s -O2 -std=c11 -Wall -Wextra -Wpedantic
+DEBUGFLAGS = -std=c11 -Weverything
+#WIN32CC=i686-w64-mingw32-gcc
+#WIN64CC=x86_64-w64-mingw32-gcc
 TARGETS = mywft
 
 default: $(TARGETS)
@@ -11,14 +11,17 @@ default: $(TARGETS)
 mywft: mywft.c
 	$(CC) $(CFLAGS) $^ -o $@
 
-mywft.w32.exe: mywft.c
-	$(WIN32CC) $(CFLAGS) $^ -o $@
+gcc: mywft.c
+	$(GCC) $(CFLAGS) $^ -o mywft
 
-mywft.w64.exe: mywft.c
-	$(WIN64CC) $(CFLAGS) $^ -o $@
+debug: mywft.c
+	$(CC) $(DEBUGFLAGS) $^ -o mywft
 
-clang: mywft.c
-	$(CLANG) $(CLANGFLAGS) $^ -o mywft
+#mywft.w32.exe: mywft.c
+#	$(WIN32CC) $(CFLAGS) $^ -o $@
+
+#mywft.w64.exe: mywft.c
+#	$(WIN64CC) $(CFLAGS) $^ -o $@
 
 clean:
 	rm $(TARGETS)
