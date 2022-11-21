@@ -3,10 +3,11 @@
 	mywft: Watch Face Tool for MO YOUNG / DA FIT binary watch face files.
 	Typically obtained by DA FIT app from api.moyoung.com
 
-	Currently targets type (tpls) 33, of 240x280 resolution, used in the following watches:
-		DAFIT C20		MOY-QHF3		"TANK"-like. Advertised as 280x320 pixels :/
+	Tested on the following watches:
+		C20		MOY-QHF3-2.0.4		240x280
 
 	File identifier (first byte of file) is 0x04, 0x81 or 0x84 for these faces.
+	File type (not directly specified in file) we call type A, B or C.
 
 	Copyright 2022 David Atkinson
 	Author: David Atkinson <dav!id47k@d47.co> (remove the '!')
@@ -46,34 +47,39 @@ typedef struct _WatchType {
 	char fileType;			// A, B or C
 } WatchType;
 
-/*
-
-fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has row index
-TYPE A 		6				200						No											No
-TYPE B		10				400						Yes											?
-TYPE C 		10				400						No											Yes
-
-*/
-
 static WatchType watchTypes[] = {
-	{ "???", "???",   "1", 240, 240, 'A' },			// square face
-	{ "???", "???",   "6", 240, 240, 'A' },			// round face
-	{ "???", "???",   "7", 240, 240, 'A' },			// round face
-	{ "???", "???",   "8", 240, 240, 'A' },			// 
-	{ "???", "???",  "13", 240, 240, 'B' },			// 
-	{ "???", "???",  "19", 240, 240, 'B' },			// round face
-	{ "???", "???",  "20", 240, 240, 'B' },			// 
-	{ "???", "???",  "25", 360, 360, 'B' },			// round face
-	{ "???", "???",  "27", 240, 240, 'A' },			// 
-	{ "???", "???",  "28", 240, 240, 'A' },			// 
-	{ "???", "???",  "29", 240, 240, 'A' },			// 
-	{ "???", "???",  "30", 240, 240, 'B' },			// 
-	{ "C20", "QHF3", "33", 240, 280, 'C' },			// 
-	{ "???", "???",  "34", 240, 280, 'B' },			// 
-	{ "???", "???",  "36", 240, 295, 'B' },			// 
-	{ "???", "???",  "38", 240, 240, 'C' },			// round face
-	{ "???", "???",  "39", 240, 240, 'C' },			// square face
-	{ "???", "???",  "40", 320, 385, 'C' },			// round face	
+	{ "?", 		"?",   		"1", 	240, 240, 'A' },			// square face
+	{ "?", 		"?",   		"6", 	240, 240, 'A' },			// round face
+	{ "?", 		"?",   		"7", 	240, 240, 'A' },			// round face
+	{ "?", 		"?",   		"8", 	240, 240, 'A' },			// 
+	{ "?", 		"?",  		"13", 	240, 240, 'B' },			// 
+	{ "?", 		"?",  		"19", 	240, 240, 'B' },			// round face
+	{ "?", 		"?",  		"20", 	240, 240, 'B' },			// 
+	{ "?", 		"?",  		"25", 	360, 360, 'B' },			// round face
+	{ "?", 		"?",  		"27", 	240, 240, 'A' },			// 
+	{ "?", 		"?",  		"28", 	240, 240, 'A' },			// 
+	{ "?", 		"?",  		"29", 	240, 240, 'A' },			// 
+	{ "?", 		"?",  		"30", 	240, 240, 'B' },			// 
+	{ "C20", 	"QHF3", 	"33", 	240, 280, 'C' },			// 
+	{ "?", 		"?",  		"34", 	240, 280, 'B' },			// 
+	{ "?", 		"?",  		"36", 	240, 295, 'B' },			// 
+	{ "?", 		"?",  		"38", 	240, 240, 'C' },			// round face
+	{ "?", 		"?",  		"39", 	240, 240, 'C' },			// square face
+	{ "?", 		"?", 		"40", 	320, 385, 'C' },			// round face	
+	{ "?", 		"?", 		"41", 	360, 360, 'C' },			// round face
+	{ "?", 		"?",  		"44", 	240, 283, 'C' },			// 
+	{ "?", 		"?",  		"45", 	240, 295, 'C' },			// 
+	{ "?", 		"?",  		"46", 	240, 288, 'C' },			// 
+	{ "?", 		"?",  		"47", 	200, 320, 'C' },			// 
+	{ "?", 		"?", 		"48", 	390, 390, 'C' },			// round face
+	{ "?", 		"?",  		"49", 	320, 380, 'C' },			// 
+	{ "?", 		"?",  		"51", 	356, 400, 'C' },			// 
+	{ "?", 		"?", 		"52", 	454, 454, 'C' },			// round face
+	{ "?", 		"?",  		"53", 	368, 448, 'C' },			// 
+	{ "?", 		"?",  		"55", 	172, 320, 'C' },			// 
+	{ "?", 		"?",  		"56", 	240, 286, 'C' },			// Some show 240x280, but have y-offset of 3.
+	{ "?", 		"?",  		"59", 	320, 386, 'C' },			// Some show 320x380, but have y-offset of 3.
+	{ "?", 		"?",  		"60", 	240, 284, 'C' },			// Some show 240x280, but have y-offset of 2.
 };
 
 
@@ -236,8 +242,16 @@ static RGBTrip RGB565to888(u16 pixel) {
 //  BINARY FILE STRUCTURE
 //----------------------------------------------------------------------------
 
+/***
 
-/* For reference: 
+fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has row index
+TYPE A 		6				200						No											No
+TYPE B		10				400						Yes											???
+TYPE C 		10				400						No											Yes
+
+
+For reference:
+
 typedef struct _FaceDataA {
 	u8 type;				// type of object we are giving dimensions e.g. hours, day, steps etc.
 	u8 x;			
@@ -257,7 +271,8 @@ typedef struct _FaceHeaderA {
 	u32 offsets[250];		// offsets of bitmap data for the face. Table starts at 200. Offsets start from end of header data i.e. at 1700.
 	u16 sizes[250];			// sizes of the bitmap data, in bytes. Unreliable.
 } FaceHeaderA;				// size is 1700 bytes
-*/
+
+***/
 
 typedef struct _FaceData {
 	u8 type;				// type of object we are giving dimensions e.g. hours, day, steps etc.
@@ -407,9 +422,9 @@ static const DataType dataTypes[] = {
 	{ 0xF3, "HAND_SEC", 1 },			// Hour hand (at 1200 positio ).
 	{ 0xF4, "HAND_PIN_UPPER", 1 },		// top half of dot. in #2102, 2105-6,2109,2112-2113,2117-8,2142,2145-2149
 	{ 0xF5, "HAND_PIN_LOWER", 1 },		// bottom half of dot.
-	{ 0xF6, "SPACED_OUT", 4 },			// 4-frames: seasons or time of day? on #3135, 3156, 5315.
-	{ 0xF7, "DINOSAUR", 8 },			// 8-frame animation. #3145, #163.  #3087, #3088 has it as a 7-frame animation.
-	{ 0xF8, "SPACEMAN", 21 },			// 21-frame animation. #3085, #3086, #3248.  #3112 has it as a 14-frame animation.
+	{ 0xF6, "TAP_TO_CHANGE", 4 },		// 4 alternative images. Tap to change. On #3156, #5315. #3135 has it as 3 images.
+	{ 0xF7, "ANIM_DINOSAUR", 8 },		// 8-frame animation. #3145, #163.  #3087, #3088 has it as a 7-frame animation.
+	{ 0xF8, "ANIM_SPACEMAN", 21 },		// 21-frame animation. #3085, #3086. #3112 has it as a 14-frame animation. #3248 has it as a 10-frame animation.
 };		
 								
 static const char dataTypeStrUnknown[12] = "UNKNOWN";
@@ -540,14 +555,17 @@ static int dumpBMP16(char * filename, u8 * srcData, u32 imgWidth, u32 imgHeight,
 			memset(buf, 0, destRowSize);
 			u32 bufIdx = 0;
 
-			//printf("line %d, srcIdx %lu, lineEndOffset %d, first color 0x%04x, first count %d\n", y, srcIdx, lineEndOffset[y], 0, srcData[srcIdx+2]);
+			//printf("line %d, srcIdx %lu, lineEndOffset %d, first color 0x%04x, first count %d\n", y, srcIdx, get_u16(&lineEndOffset[y*2]), 0, srcData[srcIdx+2]);
 			
-			while(srcIdx < get_u16(&lineEndOffset[y*2])) { // built in end-of-line detection			
+			while(srcIdx < get_u16(&lineEndOffset[y*2])) { // built in end-of-line detection
 				u8 count = srcData[srcIdx + 2];
 				u8 pixel0 = srcData[srcIdx + 1];
 				u8 pixel1 = srcData[srcIdx + 0];
 
 				for(int j=0; j<count; j++) {	// fill out this color
+					if(bufIdx+1 >= sizeof(buf)) {
+						break;		// don't write past end of buffer. only a problem with erroneous files.
+					}
 					buf[bufIdx] = pixel0;
 					buf[bufIdx+1] = pixel1;
 					bufIdx += 2;
