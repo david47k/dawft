@@ -63,6 +63,7 @@ typedef struct _RGBTrip {
 
 #pragma pack (pop)
 
+
 //----------------------------------------------------------------------------
 //  BMP HEADER - FUNCTIONS
 //----------------------------------------------------------------------------
@@ -71,15 +72,27 @@ void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, u8 bpp)
 void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp);
 int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u32 imgHeight, u8 oldRLE);
 
+
+//----------------------------------------------------------------------------
+//  IMG - STORE BASIC IMAGE DATA
+//----------------------------------------------------------------------------
+
 // Img is a simple RGB565 image data struct
 typedef struct _Img {
     u32 w;					// width in pixels
     u32 h;					// height in pixels
-	u32 compressionType; 	// 0 = none, 1=lineRLE
+	u32 compression;	 	// 0 = NONE, 1 = RLE_LINE
 	u32 size;				// size of data in bytes
     u8 * data;				// each pixel is 2 bytes when uncompressed
 } Img;
 
-Img * deleteImg(Img * i);
+enum ImgCompression {
+	NONE = 0,
+	RLE_LINE = 1,
+	RLE_CLASSIC = 2,
+	LZO = 3,
+};
+
 Img * newImgFromFile(char * filename);
-int rawImgToRleImg(Img * img);
+Img * deleteImg(Img * i);
+int compressImg(Img * img);

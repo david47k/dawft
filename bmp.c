@@ -375,7 +375,7 @@ Img * newImgFromFile(char * filename) {
 	}
 	img->w = (u32)h->width;
 	img->h = (u32)h->height;
-	img->compressionType = 0;			// No compression
+	img->compression = 0;			// No compression
 	img->size = img->w * img->h * 2;	// Size is simple to calculate when no compression
 	img->data = malloc(img->size);
 	if(img->data == NULL) {
@@ -434,6 +434,7 @@ Img * newImgFromFile(char * filename) {
 	return img;
 }
 
+// Delete an Img. Safe to use on already deleted Img.
 Img * deleteImg(Img * i) {
     if(i != NULL) {
 		if(i->data != NULL) {
@@ -446,17 +447,21 @@ Img * deleteImg(Img * i) {
 	return i;
 }
 
-int rawImgToRleImg(Img * img) {
+//----------------------------------------------------------------------------
+//  COMPRESS IMG - Compress using (RLE_LINE) if it shrinks the size
+//----------------------------------------------------------------------------
+ 
+int compressImg(Img * img) {
 	// Check it is a raw img we got
-	if(img == NULL || img->compressionType != 0) {
+	if(img == NULL || img->compression != 0) {
 		return 100;
 	}
 
-	// Check the size of the raw img isn't too big
+	// Check the image isn't too big
 	size_t minSize = 2 + (img->h * 2) + (img->w + 255) / 255 * 3 * img->h;
 
 	if(minSize > 65535) { // we can't store 16-bit offsets in a bigger file
-		printf("Image too large to be RLEline encoded.\n");
+		printf("Image too large to be RLE_LINE encoded.\n");
 	}
 
 	size_t maxSize = (img->w * img->h * 3); // pixel data worst case
@@ -520,7 +525,7 @@ int rawImgToRleImg(Img * img) {
 		}
 		// save offset
 		if(offset > 65535) {
-			printf("Image exceeded lineRLE capabilities\n");
+			printf("Image exceeded RLE_LINE capabilities\n");
 			free(buf);
 			return 3;
 		}
@@ -529,12 +534,9 @@ int rawImgToRleImg(Img * img) {
 
 	// Check if the size is better
 	if(offset >= img->size) {
-		//printf("Not compressed (original %7u, lineRLE %7u)\n", img->size, offset);
 		free(buf);
 		return 0; // success, but not compressed
 	}
-
-	//printf("Compressed     (original %7u, lineRLE %7u)\n", img->size, offset);
 
 	// Free the original data and store the new data
 	buf = realloc(buf, offset);	// remove any excess memory allocation
@@ -546,7 +548,7 @@ int rawImgToRleImg(Img * img) {
 	free(img->data);
 	img->data = buf;
 	img->size = offset;
-	img->compressionType = 1;
+	img->compression = 1;
 	return 0;
 }
 

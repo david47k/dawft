@@ -492,9 +492,8 @@ static char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect
 
 
 //----------------------------------------------------------------------------
-//  CREATE - Read a watchface.txt file and associated bitmaps and save to bin.
+//  CREATEBIN - Read a watchface.txt file and associated bitmaps and save to bin.
 //----------------------------------------------------------------------------
-
 
 static int createBin(char * srcFolder, char * outputFileName) {
 	printf("Creating '%s' from folder '%s'.\n", outputFileName, srcFolder);
@@ -601,7 +600,7 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			return 1;
 		}
 
-		int r = rawImgToRleImg(img);
+		int r = compressImg(img);
 		if(r != 0) {
 			printf("ERROR: rawImgToRleImg() failed with error code %d\n", r);
 			fclose(binFile);
