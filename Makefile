@@ -15,7 +15,7 @@ release: $(SRCFILES)
 debug: $(SRCFILES)
 	$(CC) -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer $^ -o $(EXE)
 
-debugcc: $(SRCFILES)
+debuggcc: $(SRCFILES)
 	$(GCC) $(CFLAGS) -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
 
 #win-x86: $(SRCFILES)
