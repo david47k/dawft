@@ -75,10 +75,11 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 typedef struct _Img {
     u32 w;					// width in pixels
     u32 h;					// height in pixels
-	u32 compressionType; 	// 0 = none
+	u32 compressionType; 	// 0 = none, 1=lineRLE
 	u32 size;				// size of data in bytes
     u8 * data;				// each pixel is 2 bytes when uncompressed
 } Img;
 
 Img * deleteImg(Img * i);
 Img * newImgFromFile(char * filename);
+int rawImgToRleImg(Img * img);

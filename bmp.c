@@ -158,7 +158,7 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 	}
 
 	if(isRLE && !oldRLE) {
-		// The newer RLE style has a table at the start with the offsets of each row.
+		// The newer RLE style has a table at the start with the offsets of each row. (lineRLE)
 		u8 * lineEndOffset = &srcData[2];
 		size_t srcIdx = (2 * imgHeight) + 2; // offset from start of RLEImage to RLEData
 
@@ -305,7 +305,7 @@ Img * newImgFromFile(char * filename) {
 	BMPHeaderClassic * h = (BMPHeaderClassic *)bytes->data;
 
 	int fail = 0;
-	if(h->sig != 0x424D) {
+	if(h->sig != 0x4D42) {
 		printf("ERROR: BMP file is not a bitmap.\n");
 		fail = 1;
 	}
@@ -377,14 +377,14 @@ Img * newImgFromFile(char * filename) {
 	img->h = (u32)h->height;
 	img->compressionType = 0;			// No compression
 	img->size = img->w * img->h * 2;	// Size is simple to calculate when no compression
-	img->data = malloc(img->w * img->h * 2);
+	img->data = malloc(img->size);
 	if(img->data == NULL) {
 		printf("ERROR: Out of memory.\n");
 		deleteBytes(bytes);
 		deleteImg(img);
 		return NULL;
 	}
-	
+
 	// Reading the file data depends on bpp
 	if(h->bpp == 16) { // RGB565
 		// check bitfields are what we expect
@@ -402,10 +402,15 @@ Img * newImgFromFile(char * filename) {
 		}
 
 		// read in data, row by row
-		for(u32 i=0; i<img->h; i++) {
-			u32 row = topDown ? i : (img->h - i);
+		for(u32 i = 0; i < img->h; i++) {
+			u32 row = topDown ? i : (img->h - i - 1);
 			size_t bmpOffset = h->offset + row * rowSize;
-			memcpy(&img->data[row * img->w], &bytes->data[bmpOffset], img->w * img->h * 2);
+			memcpy(&img->data[row * img->w * 2], &bytes->data[bmpOffset], img->w * 2);
+			// swap byte order
+			for(u32 j=0; j<img->w*2; j+=2) {
+				u16 * ptr = (u16*)&img->data[row*img->w*2 + j];
+				*ptr = swap_bo_u16(*ptr);
+			}
 		}
 
 		// done!
@@ -440,3 +445,108 @@ Img * deleteImg(Img * i) {
     }
 	return i;
 }
+
+int rawImgToRleImg(Img * img) {
+	// Check it is a raw img we got
+	if(img == NULL || img->compressionType != 0) {
+		return 100;
+	}
+
+	// Check the size of the raw img isn't too big
+	size_t minSize = 2 + (img->h * 2) + (img->w + 255) / 255 * 3 * img->h;
+
+	if(minSize > 65535) { // we can't store 16-bit offsets in a bigger file
+		printf("Image too large to be RLEline encoded.\n");
+	}
+
+	size_t maxSize = (img->w * img->h * 3); // pixel data worst case
+	maxSize += (2 + img->h * 2); // header size
+
+	// Allocate a stack of RAM to keep the image in
+	u8 * buf = malloc(maxSize);
+	if(buf==NULL) {
+		printf("Out of memory (allocating %zu bytes).\n", maxSize);
+		return 101;
+	}
+
+	buf[0] = 0x08;
+	buf[1] = 0x21;
+
+	// Calculate offset
+	u32 offset = 2 + 2 * img->h;	// id is 2 bytes, offsets are u16 and are of the end of line / running offset
+
+	// For each line
+	for(u32 y=0; y<img->h; y++) {
+		u8 c[2] = { 0 };
+		u8 runLength = 0;
+		for(u32 x=0; x<img->w; x++) {
+			u8 p[2];
+			p[0] = img->data[y*img->w*2 + x*2];
+			p[1] = img->data[y*img->w*2 + x*2 + 1];
+			if(x==0) {
+				c[0] = p[0];
+				c[1] = p[1];
+				runLength = 1;
+				continue;
+			} 
+			if(p[0] != c[0] || p[1] != c[1]) {
+				// end the run and start a new one
+				buf[offset]   = c[0];
+				buf[offset+1] = c[1];
+				buf[offset+2] = runLength;
+				offset += 3;
+				c[0] = p[0];
+				c[1] = p[1];
+				runLength = 1;
+			} else { //if(p[0]==c[0] && p[1]==c[1])
+				// increase the run
+				runLength ++;
+				if(runLength==255) {
+					// save and restart the run
+					buf[offset]   = c[0];
+					buf[offset+1] = c[1];
+					buf[offset+2] = runLength;
+					offset += 3;
+					runLength = 0;
+				}
+			}
+		}
+		// save remaining run, if anything
+		if(runLength > 0) {
+			buf[offset]   = c[0];
+			buf[offset+1] = c[1];
+			buf[offset+2] = runLength;
+			offset += 3;
+		}
+		// save offset
+		if(offset > 65535) {
+			printf("Image exceeded lineRLE capabilities\n");
+			free(buf);
+			return 3;
+		}
+		((u16*)(&buf[2+y*2]))[0] = (u16)offset;
+	}
+
+	// Check if the size is better
+	if(offset >= img->size) {
+		//printf("Not compressed (original %7u, lineRLE %7u)\n", img->size, offset);
+		free(buf);
+		return 0; // success, but not compressed
+	}
+
+	//printf("Compressed     (original %7u, lineRLE %7u)\n", img->size, offset);
+
+	// Free the original data and store the new data
+	buf = realloc(buf, offset);	// remove any excess memory allocation
+	if(buf == NULL) {
+		printf("ERROR: realloc() failure\n");
+		return 5;
+	}
+	
+	free(img->data);
+	img->data = buf;
+	img->size = offset;
+	img->compressionType = 1;
+	return 0;
+}
+

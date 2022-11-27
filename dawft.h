@@ -33,7 +33,7 @@ typedef int32_t i32;
 #define streq(a,b) (strcmp(a,b)==0)
 
 // Boolean string compare. b must give a proper size.
-#define streqn(a,b) (strncmp(a,b,sizeof(b))==0)
+#define streqn(a,b,n) (strncmp(a,b,n)==0)
 
 // Swap byte order on u16
 #define swap_bo_u16(input) (u16)((input & 0xFF) << 8) | ((input & 0xFF00) >> 8)
@@ -51,7 +51,7 @@ typedef int32_t i32;
 
 typedef struct _Bytes {
     size_t size;
-    u8 data[1];
+    u8 data[16];        // cover weird padding/align situations
 } Bytes;
 
 //----------------------------------------------------------------------------

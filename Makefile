@@ -1,24 +1,21 @@
 CC=clang
 GCC=gcc
-FLAGS = -s -O2 -std=c99 -Wall -Wextra -Wpedantic
+CFLAGS = -std=c99 -Wall -Wextra -Wpedantic
 #WIN32CC=i686-w64-mingw32-gcc
 #WIN64CC=x86_64-w64-mingw32-gcc
-SRCFILES = bmp.c dawft.c
+SRCFILES = bmp.c strutil.c dawft.c
 EXE = dawft
 TARGETS = $(EXE)
 
-default: release
+default: debug
 
 release: $(SRCFILES)
-	$(CC) $(CFLAGS) $^ -o $(EXE)
+	$(CC) $(CFLAGS) -s -O2 $^ -o $(EXE)
 
 debug: $(SRCFILES)
-	$(CC) -std=c99 -Weverything $^ -o $(EXE)
+	$(CC) -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer $^ -o $(EXE)
 
-safer: $(SRCFILES)
-	$(CC) -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer -O1 $^ -o $(EXE)
-
-safergcc: $(SRCFILES)
+debugcc: $(SRCFILES)
 	$(GCC) $(CFLAGS) -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
 
 #win-x86: $(SRCFILES)
