@@ -314,7 +314,7 @@ static int getDataTypeIdx(u8 type) {
 	return -1; // failed to find
 }
 
-static void printTypes() {
+static int printTypes() {
 	printf("DATA TYPES FOR BINARY WATCH FACE FILES\nNote: Width and height of digits is of a single digit (bitmap).\n\n");
 	printf("Code  Name              Count  Description\n");	
 	u32 typeCount = sizeof(dataTypes)/sizeof(DataType);
@@ -322,6 +322,7 @@ static void printTypes() {
 		printf("0x%02x  %-16s  %2u     %s\n", dataTypes[i].type, dataTypes[i].str, dataTypes[i].count, dataTypes[i].description);	
 	}
 	printf("\n");
+	return 0;
 }
 
 
@@ -347,6 +348,57 @@ static int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h, Extr
 	return matchIdx; // -1 for failure, index for success
 }
 
+//----------------------------------------------------------------------------
+//  NEWBYTESFROMFILE - read entire file into memory
+//----------------------------------------------------------------------------
+
+// Read file into struct Bytes. Delete with deleteBytes.
+Bytes * newBytesFromFile(char * filename) {
+	// Open the binary input file
+    FILE * f = fopen(filename, "rb");
+    if(f==NULL) {
+		printf("ERROR: Failed to open input file: '%s'\n", filename);
+		return NULL;
+    }
+
+	// Check file size
+    fseek(f,0,SEEK_END);
+	long ftr = ftell(f);
+	fseek(f,0,SEEK_SET);
+	size_t fileSize = (size_t)ftr;
+
+	// Allocate buffer
+	u8 * buf = malloc(sizeof(size_t)+fileSize);
+	if(buf == NULL) {
+		printf("ERROR: Unable to allocate enough memory to open file.\n");
+		fclose(f);
+		return NULL;
+	}
+
+ 	// Read whole file
+	if(fread(&buf[sizeof(size_t)],1,fileSize,f) != fileSize) {
+		printf("ERROR: Read failed.\n");
+		fclose(f);
+		free(buf);
+		return NULL;
+	}
+
+	// Now file is loaded, close the file
+	fclose(f);
+
+	// Return the allocated memory filled with the file data
+	Bytes * b = (Bytes *)buf;
+	b->size = fileSize;	
+	return b;
+}
+
+Bytes * deleteBytes(Bytes * b) {
+	if(b != NULL) {
+		free(b);
+		b = NULL;
+	}
+	return b;
+}
 
 //----------------------------------------------------------------------------
 //  DUMPBLOB - dump binary data to file
@@ -439,13 +491,233 @@ static char autodetectFileType(u8 * fileData, size_t fileSize) {		// Auto-detect
 
 
 //----------------------------------------------------------------------------
+//  CREATE - Read a watchface.txt file and associated bitmaps and save to bin.
+//----------------------------------------------------------------------------
+
+typedef struct _TokensIdx {
+	u32 count;
+	u32 idx[8];	// start index
+	char * ptr[8]; // pointer to start
+} TokensIdx;
+
+static void getTokensIdx(char * str, TokensIdx * t) {
+	// Tokens are seperated by any amount of ' ' or \t
+	// Line ends with 0x00
+	// Anything ascii (printable) that isn't whitespace is part of the token
+	// Maximum 8 tokens read
+	bool finished = false;
+	bool wasSpace = true;
+	for(u32 i=0; !finished; i++) {
+		char c = str[i];
+		if(c == ' ' || c == '\t') {
+			wasSpace = true;
+		} else if(c > 32 && c < 127) {
+			if(wasSpace) {
+				t->idx[t->count] = i;
+				t->ptr[t->count] = &str[i];
+				t->count++;
+				wasSpace = false;
+			}
+		} else {
+			finished = true;
+		}
+	}
+}
+
+static u32 readHex(char * s) {
+	// read hex digits
+	// we require them to start with 0x
+	// overflow is undefined
+	if(s[0] != '0' || s[1] != 'x') {
+		return 0;
+	}
+	
+	u32 total = 0;
+	bool finished = false;
+	for(int i=0; !finished && i<8; i++) {
+		char c = s[i];
+		u8 n = 0;
+		if(c >= '0' && c <= '9') {
+			n = c - '0';
+		} else if(c >= 'A' && c<= 'F') {
+			n = c - 'A';
+		} else if(c >= 'a' && c<= 'f') {
+			n = c - 'a';
+		} else {
+			finished = true;
+		}
+		if(!finished) {
+			total <<= 4;
+			total |= n;
+		}
+	}
+	return total;
+}
+
+static u32 readInt(char * s) {
+	// read decimal integer. unsigned. overflow is undefined.
+	u32 total = 0;
+	bool finished = false;
+	for(int i=0; !finished && i<10; i++) {
+		char c = s[i];
+		u8 n = 0;
+		if(c >= '0' && c <= '9') {
+			n = c - '0';
+		} else {
+			finished = true;
+		}
+		if(!finished) {
+			total *= 10;
+			total += n;
+		}
+	}
+	return total;
+}
+
+static int createBin(char * srcFolder, char * outputFileName) {
+	char fileNameBuf[1024];
+	snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%swatchface.txt", srcFolder, DIR_SEPERATOR);
+	
+	// load watchface.txt
+	FILE * textFile = fopen(fileNameBuf,"rb");
+	if(textFile == NULL) {
+		printf("ERROR: Failed to open '%s' for reading\n", fileNameBuf);
+		return 1;
+	}
+
+	FaceHeader h = { 0 };
+	ExtraFileInfo efi = { 0 };
+
+	char lineBuf[201];
+	char * ptr = NULL;
+	u32 lineNumber = 1;
+
+	#define printWarning(s) printf("WARNING: in watchface.txt line %u: %s.\n", lineNumber, s)
+	#define printError(s) printf("ERROR: in watchface.txt line %u: %s.\n", lineNumber, s)
+
+	while(1) {
+		ptr = fgets(lineBuf, sizeof(lineBuf), textFile);
+		if(ptr == NULL) break;				// stop if there's no more data to read
+		if(strlen(lineBuf)==0) continue;	// check for empty lines
+		if(lineBuf[0]=='#') continue;		// ignore comments
+
+		TokensIdx tok;
+		getTokensIdx(lineBuf, &tok);
+		if(tok.count < 2) {	// we don't have any single-token commands
+			continue;
+		}
+		if(streqn(tok.ptr[0], "fileType")) {
+			efi.fileType = (u8)readHex(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "fileID")) {
+			h.fileID = (u8)readHex(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "faceNumber")) {
+			h.faceNumber = (u16)readInt(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "dataCount")) {
+			// We'll calculate this ourselves
+		} else if(streqn(tok.ptr[0], "blobCount")) {
+			h.blobCount = (u8)readInt(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "padding")) {
+			// We don't care about this
+		} else if(streqn(tok.ptr[0], "animationFrames")) {
+			efi.animationFrames = (u16)readInt(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "faceData")) {
+			// check enough tokens
+			if(tok.count < 8) {
+				printWarning("Insufficient tokens for faceData");
+				continue;
+			}
+			h.faceData[h.dataCount].type = (u8)readHex(tok.ptr[1]);
+			h.faceData[h.dataCount].idx = (u8)readHex(tok.ptr[2]);
+			// tok3 is name of type. I guess it's a TODO to read it instead of the type code...
+			h.faceData[h.dataCount].x = (u16)readInt(tok.ptr[4]);
+			h.faceData[h.dataCount].y = (u16)readInt(tok.ptr[5]);
+			h.faceData[h.dataCount].w = (u16)readInt(tok.ptr[6]);
+			h.faceData[h.dataCount].h = (u16)readInt(tok.ptr[7]);
+			h.dataCount ++;
+		} else {
+			printWarning("Unrecognised token");
+		}
+
+		lineNumber ++;
+	}
+
+	// Do some sanity checks
+	if(efi.fileType != 'C') {
+		printError("fileType is not (yet) supported");
+		return 1;
+	}
+	if(h.dataCount < 1) {
+		printError("No faceData lines founds");
+		return 1;
+	}
+
+	if(h.blobCount < 1) {
+		printError("blobCount must be at least 1");
+		return 1;
+	}
+
+	// create output file
+	
+	FILE * binFile = fopen(outputFileName, "wb");
+	if(binFile == NULL) {
+		printf("ERROR: Failed to open '%s' for writing\n", outputFileName);
+		return 1;
+	}
+
+	// start at the appropriate offset
+	fseek(binFile, sizeof(FaceHeader), SEEK_SET);
+
+	u32 offset = 0;
+	// read and dump bitmaps
+	for(int i=0; i<h.blobCount; i++) {
+		snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%04u.bmp", srcFolder, DIR_SEPERATOR, i);
+		Img * img = newImgFromFile(fileNameBuf);
+		if(img == NULL) {
+			printf("ERROR: Unable to load image from file '%s'\n", fileNameBuf);
+			fclose(binFile);
+			// Could delete the binfile here...
+			return 1;
+		}
+
+		// save the data offset to appropriate place in offset table
+		h.offsets[i] = offset;
+		offset += img->size;
+
+		// save the image data to the binfile
+		size_t r = fwrite(img->data, 1, img->size, binFile);
+		if(r != img->size) {
+			printf("ERROR: Unable to write image to output file.\n");
+			// Could delete the binfile here...
+			fclose(binFile);
+			deleteImg(img);
+			return 1;
+		}
+		
+		deleteImg(img);
+	}
+
+	// dump header
+	fseek(binFile, 0, SEEK_SET);
+	size_t r = fwrite((u8 *)&h, 1, sizeof(FaceHeader), binFile);
+	if(r != sizeof(FaceHeader)) {
+		printf("ERROR: Unable to write header to output file.\n");
+		// Could delete the binfile here...
+		fclose(binFile);
+		return 1;
+	}
+
+	fclose(binFile);
+	return 0; // SUCCESS
+}
+
+
+//----------------------------------------------------------------------------
 //  MAIN
 //----------------------------------------------------------------------------
 
 int main(int argc, char * argv[]) {
-	char * filename = "";
-	char * foldername = "";
-	char * filemode = "rb";
+	char * fileName = "";
+	char * folderName = "";
 	enum _MODE {
 		HELP,
 		INFO,
@@ -480,13 +752,10 @@ int main(int argc, char * argv[]) {
 	if(argc >= 2) {
 		if(streq(argv[1], "dump")) {
 			mode = DUMP;
-			filemode="rb";
 		} else if(streq(argv[1], "create")) {
 			mode = CREATE;
-			filemode = "wb";
 		} else if(streq(argv[1], "info")) {
 			mode = INFO;
-			filemode="rb";
 		} else if(streq(argv[1], "print_types")) {
 			mode = PRINT_TYPES;
 		}
@@ -494,8 +763,7 @@ int main(int argc, char * argv[]) {
 
 	// display type information
 	if(mode==PRINT_TYPES) {
-		printTypes();
-		return 0;
+		return printTypes();
 	}
 
 	// display help
@@ -535,58 +803,36 @@ int main(int argc, char * argv[]) {
 			printf("ERROR: Invalid fileType=\n");
 			return 1;
 		} else if(streqn(argv[i],"folder=") && strlen(argv[i]) >= 8) {
-			foldername = &argv[i][7];
+			folderName = &argv[i][7];
 		} else {
 			// must be filename
-			filename=argv[i];
+			fileName=argv[i];
 		}
 	}
 
 	// Check if we are in CREATE mode
 	if(mode==CREATE) {
-		printf("ERROR: Create mode not yet implemented.\n");
-		return 1;
+		return createBin(folderName, fileName);
 	}
-
 
 	// We are in INFO / DUMP mode
 
 	// Open the binary input file
-    FILE * f = fopen(filename, filemode);
-    if(f==NULL) {
-		printf("ERROR: Failed to open input file: '%s'\n", filename);
+	Bytes * bytes = newBytesFromFile(fileName);
+	if(bytes == NULL) {
+		printf("ERROR: Failed to read file into memory.\n");
 		return 1;
-    }
+	}
 
-	// Check file size
-    fseek(f,0,SEEK_END);
-	long ftr = ftell(f);
-	fseek(f,0,SEEK_SET);
+	u8 * fileData = bytes->data;
+	size_t fileSize = bytes->size;
 
-	if(ftr < 1700) {
+	// Check file size	
+	if(fileSize < 1700) {
 		printf("ERROR: File is less than the minimum header size (1700 bytes)!\n");
-		fclose(f);
+		deleteBytes(bytes);
 		return 1;
 	}
-
-	size_t fileSize = (size_t)ftr;
-
-	// Allocate buffer and read whole file
-	u8 * fileData = malloc(fileSize);
-	if(fileData == NULL) {
-		printf("ERROR: Unable to allocate enough memory to open file.\n");
-		fclose(f);
-		return 1;
-	}
-	if(fread(fileData,1,fileSize,f) != fileSize) {
-		printf("ERROR: Read failed.\n");
-		fclose(f);
-		free(fileData);
-		return 1;
-	}
-
-	// Now file is loaded, close the file
-	fclose(f);
 
 	// Check first byte of file
 	if(fileData[0] != 0x81 && fileData[0] != 0x04 && fileData[0] != 0x84) {
@@ -607,9 +853,10 @@ int main(int argc, char * argv[]) {
 		headerSize = 1700;
 	}
 
+	// Check header size
 	if(fileSize < headerSize) {
 		printf("ERROR: File is less than the header size (%u bytes)!\n", headerSize);
-		fclose(f);
+		deleteBytes(bytes);
 		return 1;
 	}
 
@@ -702,7 +949,7 @@ int main(int argc, char * argv[]) {
 	}
 
 	if(fail) {
-		free(fileData);
+		deleteBytes(bytes);
 		return 1;
 	}
 
@@ -723,7 +970,7 @@ int main(int argc, char * argv[]) {
 		if(fileType == 'B') {
 			// What compression method is used in type B files? LZO?
 			printf("Dumping from fileType B is not supported\n");
-			free(fileData);
+			deleteBytes(bytes);
 			return 1;
 		}
 
@@ -731,10 +978,10 @@ int main(int argc, char * argv[]) {
 		char * folderStr;
 		char faceNumberStr[16];
 		snprintf(faceNumberStr, sizeof(faceNumberStr), "%d", h->faceNumber);
-		if(foldername[0]==0) {		// if empty string
+		if(folderName[0]==0) {		// if empty string
 			folderStr = faceNumberStr;
 		} else {
-			folderStr = foldername;
+			folderStr = folderName;
 		}
 		
 		// create folder if it doesn't exist
@@ -748,13 +995,13 @@ int main(int argc, char * argv[]) {
 		FILE * fwf = fopen(dumpFileName,"wb");
 		if(fwf == NULL) {
 			printf("ERROR: Failed to open '%s' for writing\n", dumpFileName);
-			free(fileData);
+			deleteBytes(bytes);
 			return 1;
 		}
 		size_t res = fwrite(watchFaceStr, 1, strlen(watchFaceStr), fwf);
 		if(res != strlen(watchFaceStr)) {
 			printf("ERROR: Failed when writing to '%s'\n", dumpFileName);
-			free(fileData);
+			deleteBytes(bytes);
 			fclose(fwf);
 			return 1;
 		}
@@ -833,7 +1080,7 @@ int main(int argc, char * argv[]) {
 		}
 	}
 
-	free(fileData);	
+	deleteBytes(bytes);
 	printf("\ndone.\n\n");
 
     return 0; // SUCCESS
