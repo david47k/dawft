@@ -1,11 +1,11 @@
 CC=clang
 GCC=gcc
 CFLAGS = -std=c99 -Wall -Wextra -Wpedantic
-#WIN32CC=i686-w64-mingw32-gcc
-#WIN64CC=x86_64-w64-mingw32-gcc
+WIN32CC=i686-w64-mingw32-gcc
+WIN64CC=x86_64-w64-mingw32-gcc
 SRCFILES = bmp.c strutil.c dawft.c
 EXE = dawft
-TARGETS = $(EXE)
+TARGETS = $(EXE) $(EXE).x86.exe $(EXE).x64.exe
 
 default: debug
 
@@ -18,11 +18,9 @@ debug: $(SRCFILES)
 debuggcc: $(SRCFILES)
 	$(GCC) $(CFLAGS) -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
 
-#win-x86: $(SRCFILES)
-#	$(WIN32CC) $(CFLAGS) $^ -o $(EXE).x86.exe
-
-#win-x64: $(SRCFILES)
-#	$(WIN64CC) $(CFLAGS) $^ -o $(EXE).x64.exe
+win: $(SRCFILES)
+	$(WIN32CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x86.exe
+	$(WIN64CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x64.exe
 
 clean:
 	rm $(TARGETS)

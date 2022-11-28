@@ -20,7 +20,7 @@ typedef struct _BMPHeaderClassic {
 	u16 planes;				// 1
 	u16 bpp;				// 16
 	u32 compressionType;	// 0=BI_RGB. 3=BI_BITFIELDS. Must be set to BI_BITFIELDS for RGB565 format.
-	u32 imageDataSize;		// including padding
+	u32 imageDataSize;		// including padding - unreliable
 	u32 hres;				// pixels per metre
 	u32 vres;				// pixels per meter
 	u32 clrUsed;			// colors in image, or 0
@@ -42,7 +42,7 @@ typedef struct _BMPHeaderV4 {
 	u16 planes;				// 1
 	u16 bpp;				// 16
 	u32 compressionType;	// 3=BI_BITFIELDS. Must be set to BI_BITFIELDS for RGB565 format.
-	u32 imageDataSize;		// including padding
+	u32 imageDataSize;		// including padding - unreliable
 	u32 hres;				// pixels per metre
 	u32 vres;				// pixels per meter
 	u32 clrUsed;			// colors in image, or 0
@@ -86,12 +86,14 @@ typedef struct _Img {
     u8 * data;				// each pixel is 2 bytes when uncompressed
 } Img;
 
-enum ImgCompression {
+typedef enum _ImgCompression {
 	NONE = 0,
 	RLE_LINE = 1,
-	RLE_CLASSIC = 2,
+	RLE_BASIC = 2,
 	LZO = 3,
-};
+} ImgCompression;
+
+extern const char * ImgCompressionStr[4];
 
 Img * newImgFromFile(char * filename);
 Img * deleteImg(Img * i);

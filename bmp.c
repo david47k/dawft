@@ -19,6 +19,8 @@
 #include "bmp.h"
 
 
+const char * ImgCompressionStr[4] = { "NONE", "RGB_LINE", "RLE_BASIC", "LZO" };
+
 //----------------------------------------------------------------------------
 //  RGB565 to RGB888 conversion
 //----------------------------------------------------------------------------
@@ -354,10 +356,15 @@ Img * newImgFromFile(char * filename) {
 	}
 
 	u32 rowSize = h->imageDataSize / (u32)h->height;
-	if(rowSize < ((u32)h->width * 2)) {
-		printf("ERROR: BMP imageDataSize doesn't make sense.\n");
-		deleteBytes(bytes);
-		return NULL;
+	if(rowSize < ((u32)h->width * 2)) {		
+		// we'll have to calculate it ourselves! size of file is in b->bytes, subtract h->offset.
+		h->imageDataSize = (u32)bytes->size - h->offset;
+		rowSize = h->imageDataSize / (u32)h->height;
+		if(rowSize < ((u32)h->width * 2)) {
+			printf("ERROR: BMP imageDataSize (%u) doesn't make sense!\n", h->imageDataSize);
+			deleteBytes(bytes);
+			return NULL;
+		}
 	}
 
 	if(h->offset + h->imageDataSize < bytes->size) {
@@ -416,13 +423,13 @@ Img * newImgFromFile(char * filename) {
 		// done!
 	} else { // RGB888
 	    // read in data, row by row, pixel by pixel
-		for(u32 i=0; i<img->h; i++) {
-			u32 row = topDown ? i : (img->h - i);
+		for(u32 i=0; i < img->h; i++) {
+			u32 row = topDown ? i : (img->h - i - 1);
 			size_t bmpOffset = h->offset + row * rowSize;
-			for(u32 x=0; x<img->w; x++) {
-				u16 pixel = RGB888to565(((RGBTrip *)(&bytes->data[bmpOffset]))[x]);
-				img->data[bmpOffset + 2 * x]     = (pixel & 0xFF00) >> 8;
-				img->data[bmpOffset + 2 * x + 1] = pixel & 0xFF;
+			for(u32 x=0; x < img->w; x++) {
+				u16 pixel = RGB888to565(*(RGBTrip *)(&bytes->data[bmpOffset + x * 3]));
+				img->data[i * img->w * 2 + 2 * x]     = (pixel & 0xFF00) >> 8;
+				img->data[i * img->w * 2 + 2 * x + 1] = pixel & 0xFF;
 			}
 		}
 	}
@@ -524,10 +531,9 @@ int compressImg(Img * img) {
 			offset += 3;
 		}
 		// save offset
-		if(offset > 65535) {
-			printf("Image exceeded RLE_LINE capabilities\n");
+		if(offset > 65535) {	// Image exceeded RLE_LINE capabilities. We can't store offsets greater than 16-bits!
 			free(buf);
-			return 3;
+			return 0; // success, but not compressed
 		}
 		((u16*)(&buf[2+y*2]))[0] = (u16)offset;
 	}

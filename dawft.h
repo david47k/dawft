@@ -6,11 +6,12 @@
 //----------------------------------------------------------------------------
 
 #ifndef WINDOWS
+#define d_mkdir(s,u) mkdir(s,u)
 #define DIR_SEPERATOR "/"
 #endif
 
 #ifdef WINDOWS
-#define S_IRWXU 0700
+#define d_mkdir(s,u) mkdir(s)
 #define DIR_SEPERATOR "\\"
 #endif
 
@@ -32,7 +33,7 @@ typedef int32_t i32;
 // Boolean string compare.
 #define streq(a,b) (strcmp(a,b)==0)
 
-// Boolean string compare. b must give a proper size.
+// Boolean string compare.
 #define streqn(a,b,n) (strncmp(a,b,n)==0)
 
 // Swap byte order on u16

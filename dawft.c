@@ -28,54 +28,6 @@
 
 #include "strutil.h"
 
-//----------------------------------------------------------------------------
-//  WATCH TYPES EXAMPLES
-//----------------------------------------------------------------------------
-
-typedef struct _WatchType {
-	const char * tpls;		// Types that are requested from the watch face api.
-	u16 width;				// Screen width in pixels.
-	u16 height;				// Screen height in pixels.
-	char fileType;			// A, B or C.
-	const char * model;		// Example watch model.
-	const char * code;		// Example watch code. Starts with MOY-.
-} WatchType;
-
-static WatchType watchTypes[] = {
-	{ "1", 		240, 240, 'A', "?", 	"?" },			// square face
-	{ "6", 		240, 240, 'A', "?", 	"?" },			// round face
-	{ "7", 		240, 240, 'A', "?", 	"?" },			// round face
-	{ "8", 		240, 240, 'A', "?", 	"?" },			// 
-	{ "13", 	240, 240, 'B', "?", 	"?" },			// 
-	{ "19", 	240, 240, 'B', "?", 	"?" },			// round face
-	{ "20", 	240, 240, 'B', "?", 	"?" },			// 
-	{ "25", 	360, 360, 'B', "?", 	"?" },			// round face
-	{ "27", 	240, 240, 'A', "?", 	"?" },			// 
-	{ "28", 	240, 240, 'A', "?", 	"?" },			// 
-	{ "29", 	240, 240, 'A', "?", 	"?" },			// 
-	{ "30", 	240, 240, 'B', "?", 	"?" },			// 
-	{ "33", 	240, 280, 'C', "C20", 	"QHF3" },		// 
-	{ "34", 	240, 280, 'B', "?", 	"?" },			// 
-	{ "36", 	240, 295, 'B', "?", 	"?" },			// 
-	{ "38", 	240, 240, 'C', "?", 	"?" },			// round face
-	{ "39", 	240, 240, 'C', "?", 	"?" },			// square face
-	{ "40", 	320, 385, 'C', "?", 	"?" },			// round face	
-	{ "41", 	360, 360, 'C', "?", 	"?" },			// round face
-	{ "44", 	240, 283, 'C', "?", 	"?" },			// 
-	{ "45", 	240, 295, 'C', "?", 	"?" },			// 
-	{ "46", 	240, 288, 'C', "?", 	"?" },			// 
-	{ "47", 	200, 320, 'C', "?", 	"?" },			// 
-	{ "48", 	390, 390, 'C', "?", 	"?" },			// round face
-	{ "49", 	320, 380, 'C', "?", 	"?" },			// 
-	{ "51", 	356, 400, 'C', "?", 	"?" },			// 
-	{ "52", 	454, 454, 'C', "?", 	"?" },			// round face
-	{ "53", 	368, 448, 'C', "?", 	"?" },			// 
-	{ "55", 	172, 320, 'C', "?", 	"?" },			// 
-	{ "56", 	240, 286, 'C', "?", 	"?" },			// Some show 240x280, but have y-offset of 3.
-	{ "59", 	320, 386, 'C', "?", 	"?" },			// Some show 320x380, but have y-offset of 3.
-	{ "60", 	240, 284, 'C', "?", 	"?" },			// Some show 240x280, but have y-offset of 2.
-};
-
 
 //----------------------------------------------------------------------------
 //  DATA READING AND BYTE ORDER
@@ -93,7 +45,7 @@ static int systemIsLittleEndian() {				// return 0 for big endian, 1 for little 
 
 /***
 
-fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has row index	Different resolutions?
+fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has line index	Different resolutions?
 TYPE A 		6				200						No											No							No - always 240x240
 TYPE B		10				400						Yes	(LZO?)									N/A							Yes
 TYPE C 		10				400						No											Yes							Yes
@@ -151,7 +103,7 @@ typedef struct _FaceHeader {
 // Extra info about a binary file, which is not easy to access from binary file header
 typedef struct _ExtraFileInfo {
 	char fileType;
-	char reservedPadding;
+	char padding;
 	u16 animationFrames;
 } ExtraFileInfo;
 
@@ -850,7 +802,6 @@ int main(int argc, char * argv[]) {
 		strcat(watchFaceStr, lineBuf);
 	}
 
-	printf("%s", watchFaceStr);		// display all the important data
 
 	if(background == NULL && backgrounds == NULL) {
 		printf("WARNING: No background found.\n");
@@ -865,17 +816,34 @@ int main(int argc, char * argv[]) {
 		}
 	}
 
-	// Count offsets to verify number of blobs
-	int myBlobCount = 1;	// there is always one offset, of 0, at offsets[0]
-	for(u32 i=1; i<250; i++) {
-		if(h->offsets[i] != 0) {
+	// Count offsets to verify number of blobs. Estimate blob sizes.
+	int myBlobCount = 0;
+	u8 blobCompression[250] = { 0 };
+	int blobEstSize[250] = { 0 };
+	for(u32 i=0; i<250; i++) {
+		if(h->offsets[i] != 0 || i == 0) {
 			myBlobCount += 1;
 			if(h->offsets[i] >= fileSize && fileType != 'B' && !fail) {
 				printf("ERROR: Offset %u is greater than file size, cannot dump this file.\n", h->offsets[i]);	// Unknown file type
 				fail = 1;
+			} else {
+				int isRLE = (get_u16(&fileData[headerSize+h->offsets[i]]) == 0x2108);
+				ImgCompression ic = isRLE?(fileType=='C'?RLE_LINE:RLE_BASIC):NONE;				
+				if(fileType=='B') ic = LZO;
+				blobCompression[i] = (u8)ic;
+				if(i<249 && h->offsets[i+1] != 0) {
+					blobEstSize[i] = (int)(h->offsets[i+1] - h->offsets[i]);
+				} else {
+					blobEstSize[i] = (int)fileSize - (int)h->offsets[i];
+				}
+				snprintf(lineBuf, sizeof(lineBuf), "blobCompression %04u  %-9s  %8u  %8i\n", i, ImgCompressionStr[ic], h->offsets[i], blobEstSize[i]);
+				strcat(watchFaceStr, lineBuf);
 			}
 		} 
 	}
+
+	// display all the important data
+	printf("%s", watchFaceStr);		
 
 	if(fail) {
 		deleteBytes(bytes);
@@ -909,13 +877,10 @@ int main(int argc, char * argv[]) {
 		}
 		
 		// create folder if it doesn't exist
-		mkdir(folderStr, S_IRWXU);
-
-		// append a /
-		char * slash = DIR_SEPERATOR;
+		d_mkdir(folderStr, S_IRWXU);
 
 		// dump the watch face data
-		snprintf(dumpFileName, sizeof(dumpFileName), "%s%swatchface.txt", folderStr, slash);
+		snprintf(dumpFileName, sizeof(dumpFileName), "%s%swatchface.txt", folderStr, DIR_SEPERATOR);
 		FILE * fwf = fopen(dumpFileName,"wb");
 		if(fwf == NULL) {
 			printf("ERROR: Failed to open '%s' for writing\n", dumpFileName);
@@ -934,56 +899,55 @@ int main(int argc, char * argv[]) {
 		// for each binary blob
 		for(int i=0; i<h->blobCount; i++) {
 			// determine file offset
-			u32 fileOffset = headerSize;
-			fileOffset += h->offsets[i];
-			// printf("offset %u is %u\n", i, h->offsets[i]);
+			u32 fileOffset = headerSize + h->offsets[i];
 			
 			// get faceData index from offset index
 			int fdi = getFaceDataIndexFromOffsetIndex(i, h, &xfi);
 
+			// is it RLE?
+			int isRLE = (get_u16(&fileData[fileOffset]) == 0x2108);
+
 			if(raw) {
-				// is it RLE?
-				int isRLE = (fileData[fileOffset] == 0x08 && fileData[fileOffset+1] == 0x21);
-
-				// determine length of blob
-				size_t length = h->sizes[i];	// Sometimes, length is stored in file
-
-				if(!isRLE) { 
-					// Sometimes length isn't stored in file.
-					// We'll estimate the length
-
-					size_t estimatedLength = 0;
-					if(fdi != -1) {
-						estimatedLength = h->faceData[fdi].w * h->faceData[fdi].h * 2;
-					}
-					if(length == 0) {
-						length = estimatedLength;
-					}
-					if(length != estimatedLength && estimatedLength != 0) {
-						printf("WARNING: Length mismatch (file: %zu, estimated: %zu)\n", length, estimatedLength);
+				// determine size of blob
+				size_t size = h->sizes[i]; // Sometimes, length is stored in file, but this is unreliable, and that section is used for other purposes
+				if(blobEstSize[i] >= 0) {
+					size = (size_t)blobEstSize[i];
+					if(h->sizes[i] > 0) {
+						printf("WARNING: Overriding unreliable zone size %u with estimated size %zu\n", h->sizes[i], size);
 					}
 				}
 
-				if(length == 0) {
-					printf("WARNING: Unable to determine length for blob idx %04d, not dumping raw data.\n", i);
+				if(!isRLE) { 
+					// We can also estimate a size for uncompressed images
+					size_t estimatedSize = 0;
+					if(fdi != -1) {
+						estimatedSize = h->faceData[fdi].w * h->faceData[fdi].h * 2;
+					}
+					if(size != estimatedSize && estimatedSize != 0) {
+						printf("WARNING: Size mismatch (file: %zu, estimated: %zu, zone: %u)\n", size, estimatedSize, h->sizes[i]);
+					}
+				}
+
+				if(size == 0) {
+					printf("WARNING: Unable to determine size for blob idx %04d, not dumping raw data.\n", i);
 				} else {
 					// check it won't go past EOF
-					if(fileOffset + length > fileSize) {
-						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+length, fileSize);
+					if(fileOffset + size > fileSize) {
+						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+size, fileSize);
 						continue;
 					}
 					// assemble file name to dump to
-					snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, slash, i);
-					printf("Dumping RAW length %6zu to file %s\n", length ,dumpFileName);
+					snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, DIR_SEPERATOR, i);
+					printf("Dumping raw blob size %6zu to file %s\n", size ,dumpFileName);
 
 					// dump it
-					int rval = dumpBlob(dumpFileName, &fileData[fileOffset], length);
+					int rval = dumpBlob(dumpFileName, &fileData[fileOffset], size);
 					if(rval != 0) {
 						printf("Failed to write data to file: '%s'\n", dumpFileName);
 					}
 				}
 			}
-
+			
 			// Dump the bitmaps
 			if(fdi != -1) {
 				if(h->faceData[fdi].type == 0x00 && (fileType=='A') && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
@@ -992,13 +956,13 @@ int main(int argc, char * argv[]) {
 					h->faceData[fdi].h = 24;
 					printf("WARNING: Overriding width and height with 240x24 for backgrounds of type 0x00\n");
 				}
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, slash, i);
-				printf("Dumping BMP               to file %s\n",  dumpFileName);
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"RAW"), dumpFileName);
 				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
 			} else if(i == (h->blobCount - 1)) {
 				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, slash, i);
-				printf("Dumping BMP               to file %s\n", dumpFileName);
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"RAW"), dumpFileName);
 				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, 140, 163, (fileType=='A'));
 			}
 		}
