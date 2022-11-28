@@ -493,6 +493,9 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			h.blobCount = (u8)readNum(tok.ptr[1]);
 		} else if(streqn(tok.ptr[0], "animationFrames", 15)) {
 			efi.animationFrames = (u16)readNum(tok.ptr[1]);
+		} else if(streqn(tok.ptr[0], "blobCompression", 15)) {
+			//efi.animationFrames = (u16)readNum(tok.ptr[1]);
+			// TODO UPTO
 		} else if(streqn(tok.ptr[0], "faceData", 8)) {
 			// check enough tokens
 			if(tok.count < 8) {
@@ -829,12 +832,12 @@ int main(int argc, char * argv[]) {
 			} else {
 				int isRLE = (get_u16(&fileData[headerSize+h->offsets[i]]) == 0x2108);
 				ImgCompression ic = isRLE?(fileType=='C'?RLE_LINE:RLE_BASIC):NONE;				
-				if(fileType=='B') ic = LZO;
+				// if(fileType=='B') it's actually a big LZO blob that needs to be split up.
 				blobCompression[i] = (u8)ic;
 				if(i<249 && h->offsets[i+1] != 0) {
 					blobEstSize[i] = (int)(h->offsets[i+1] - h->offsets[i]);
 				} else {
-					blobEstSize[i] = (int)fileSize - (int)h->offsets[i];
+					blobEstSize[i] = (int)fileSize - (int)headerSize - (int)h->offsets[i];
 				}
 				snprintf(lineBuf, sizeof(lineBuf), "blobCompression %04u  %-9s  %8u  %8i\n", i, ImgCompressionStr[ic], h->offsets[i], blobEstSize[i]);
 				strcat(watchFaceStr, lineBuf);
@@ -934,6 +937,7 @@ int main(int argc, char * argv[]) {
 					// check it won't go past EOF
 					if(fileOffset + size > fileSize) {
 						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+size, fileSize);
+						// this seems funky...
 						continue;
 					}
 					// assemble file name to dump to
@@ -957,12 +961,12 @@ int main(int argc, char * argv[]) {
 					printf("WARNING: Overriding width and height with 240x24 for backgrounds of type 0x00\n");
 				}
 				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
-				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"RAW"), dumpFileName);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
 				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
 			} else if(i == (h->blobCount - 1)) {
 				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
 				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
-				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"RAW"), dumpFileName);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
 				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, 140, 163, (fileType=='A'));
 			}
 		}

@@ -19,7 +19,7 @@
 #include "bmp.h"
 
 
-const char * ImgCompressionStr[4] = { "NONE", "RGB_LINE", "RLE_BASIC", "LZO" };
+const char * ImgCompressionStr[8] = { "NONE", "RLE_LINE", "RLE_BASIC", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "UNSET" };
 
 //----------------------------------------------------------------------------
 //  RGB565 to RGB888 conversion

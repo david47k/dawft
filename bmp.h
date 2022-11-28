@@ -90,10 +90,10 @@ typedef enum _ImgCompression {
 	NONE = 0,
 	RLE_LINE = 1,
 	RLE_BASIC = 2,
-	LZO = 3,
+	UNSET = 7,				// only valid when creating new files
 } ImgCompression;
 
-extern const char * ImgCompressionStr[4];
+extern const char * ImgCompressionStr[8];
 
 Img * newImgFromFile(char * filename);
 Img * deleteImg(Img * i);
