@@ -38,6 +38,11 @@ static int systemIsLittleEndian() {				// return 0 for big endian, 1 for little 
     return (*((volatile uint8_t*)(&i))) == 0x67;
 }
 
+void set_u16(u8 * p, u16 v) {
+    p[0] = v&0xFF;
+    p[1] = v>>8;
+}
+
 
 //----------------------------------------------------------------------------
 //  BINARY FILE STRUCTURE
@@ -466,6 +471,7 @@ static int createBin(char * srcFolder, char * outputFileName) {
 	char lineBuf[1024];
 	char * ptr = NULL;
 	u32 lineNumber = 1;
+	ImgCompression blobCompression[250] = { TRY_RLE };
 
 	#define printWarning(s) printf("WARNING: in watchface.txt line %u: %s.\n", lineNumber, s)
 	#define printError(s) printf("ERROR: in watchface.txt line %u: %s.\n", lineNumber, s)
@@ -494,8 +500,21 @@ static int createBin(char * srcFolder, char * outputFileName) {
 		} else if(streqn(tok.ptr[0], "animationFrames", 15)) {
 			efi.animationFrames = (u16)readNum(tok.ptr[1]);
 		} else if(streqn(tok.ptr[0], "blobCompression", 15)) {
-			//efi.animationFrames = (u16)readNum(tok.ptr[1]);
-			// TODO UPTO
+			if(tok.count >= 3) {
+				u8 blobIdx = (u8)readNum(tok.ptr[1]);
+				if(streqn(tok.ptr[2], "NONE", 4)) {
+					blobCompression[blobIdx] = NONE;
+				} else if(streqn(tok.ptr[2], "RLE_LINE", 8)) {
+					blobCompression[blobIdx] = RLE_LINE;
+				} else if(streqn(tok.ptr[2], "RLE_BASIC", 9)) {
+					blobCompression[blobIdx] = RLE_BASIC;
+				} else if(streqn(tok.ptr[2], "TRY_RLE", 7)) {
+					blobCompression[blobIdx] = TRY_RLE;
+				} else {
+					printWarning("Unsupported requested blobCompression");
+					continue;
+				}
+			}
 		} else if(streqn(tok.ptr[0], "faceData", 8)) {
 			// check enough tokens
 			if(tok.count < 8) {
@@ -532,6 +551,13 @@ static int createBin(char * srcFolder, char * outputFileName) {
 		return 1;
 	}
 
+	// Save animation frames
+	if(efi.fileType == 'A') {
+		h.sizes[200] = efi.animationFrames;
+	} else {
+		h.sizes[0] = efi.animationFrames;
+	}
+
 	// create output file
 	
 	FILE * binFile = fopen(outputFileName, "wb");
@@ -555,12 +581,14 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			return 1;
 		}
 
-		int r = compressImg(img);
-		if(r != 0) {
-			printf("ERROR: rawImgToRleImg() failed with error code %d\n", r);
-			fclose(binFile);
-			deleteImg(img);
-			return 1;
+		if(blobCompression[i] != NONE) {
+			int r = compressImg(img);
+			if(r != 0) {
+				printf("ERROR: compressImg() failed with error code %d\n", r);
+				fclose(binFile);
+				deleteImg(img);
+				return 1;
+			}
 		}
 
 		// save the data offset to appropriate place in offset table

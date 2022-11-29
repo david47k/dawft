@@ -19,7 +19,7 @@
 #include "bmp.h"
 
 
-const char * ImgCompressionStr[8] = { "NONE", "RLE_LINE", "RLE_BASIC", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "UNSET" };
+const char * ImgCompressionStr[8] = { "NONE", "RLE_LINE", "RLE_BASIC", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "TRY_RLE" };
 
 //----------------------------------------------------------------------------
 //  RGB565 to RGB888 conversion
@@ -37,11 +37,14 @@ static RGBTrip RGB565to888(u16 pixel) {
 	return output;
 }
 
-static u16 RGB888to565(RGBTrip pixel) {
+static u16 RGB888to565(u8 * buf) {
+	u8 r = buf[0];
+	u8 g = buf[1];
+	u8 b = buf[2];
     u16 output = 0;
-    output |= (pixel.r & 0xF8) >> 3;            // 5 bits
-    output |= (pixel.g & 0xFC) << 3;            // 6 bits
-    output |= (pixel.b & 0xF8) << 8;            // 5 bits
+    output |= (r & 0xF8) >> 3;            // 5 bits
+    output |= (g & 0xFC) << 3;            // 6 bits
+    output |= (b & 0xF8) << 8;            // 5 bits
     return output;
 }
 
@@ -409,27 +412,32 @@ Img * newImgFromFile(char * filename) {
 		}
 
 		// read in data, row by row
-		for(u32 i = 0; i < img->h; i++) {
-			u32 row = topDown ? i : (img->h - i - 1);
+		for(u32 y = 0; y < img->h; y++) {
+			u32 row = topDown ? y : (img->h - y - 1);	// row is line in BMP file, y is line in our img
 			size_t bmpOffset = h->offset + row * rowSize;
-			memcpy(&img->data[row * img->w * 2], &bytes->data[bmpOffset], img->w * 2);
+			memcpy(&img->data[y * img->w * 2], &bytes->data[bmpOffset], img->w * 2);
 			// swap byte order
-			for(u32 j=0; j<img->w*2; j+=2) {
-				u16 * ptr = (u16*)&img->data[row*img->w*2 + j];
-				*ptr = swap_bo_u16(*ptr);
+			for(u32 j=0; j<(img->w*2); j+=2) {
+				u8 * a = &img->data[y*img->w*2 + j];
+				u8 * b = &img->data[y*img->w*2 + j + 1];
+				u8 temp = *a;
+				*a = *b;
+				*b = temp;
+				//u16 * ptr = (u16*)&img->data[y*img->w*2 + j];
+				//*ptr = swap_bo_u16(*ptr);
 			}
 		}
 
 		// done!
 	} else { // RGB888
 	    // read in data, row by row, pixel by pixel
-		for(u32 i=0; i < img->h; i++) {
-			u32 row = topDown ? i : (img->h - i - 1);
+		for(u32 y=0; y < img->h; y++) {
+			u32 row = topDown ? y : (img->h - y - 1);
 			size_t bmpOffset = h->offset + row * rowSize;
 			for(u32 x=0; x < img->w; x++) {
-				u16 pixel = RGB888to565(*(RGBTrip *)(&bytes->data[bmpOffset + x * 3]));
-				img->data[i * img->w * 2 + 2 * x]     = (pixel & 0xFF00) >> 8;
-				img->data[i * img->w * 2 + 2 * x + 1] = pixel & 0xFF;
+				u16 pixel = RGB888to565(&bytes->data[bmpOffset + x * 3]);
+				img->data[y * img->w * 2 + 2 * x]     = pixel >> 8;
+				img->data[y * img->w * 2 + 2 * x + 1] = pixel & 0xFF;
 			}
 		}
 	}
@@ -465,22 +473,24 @@ int compressImg(Img * img) {
 	}
 
 	// Check the image isn't too big
-	size_t minSize = 2 + (img->h * 2) + (img->w + 255) / 255 * 3 * img->h;
+	//               ...header size..   ..minimum rle units. 3bpu 
+	size_t minSize = (2 + img->h * 2) + (img->w + 255) / 255 * 3 * img->h;
 
 	if(minSize > 65535) { // we can't store 16-bit offsets in a bigger file
 		printf("Image too large to be RLE_LINE encoded.\n");
+		return 101;
 	}
 
-	size_t maxSize = (img->w * img->h * 3); // pixel data worst case
-	maxSize += (2 + img->h * 2); // header size
+	size_t maxSize = (2 + img->h * 2) + (img->w * img->h * 3); // worst case
 
 	// Allocate a stack of RAM to keep the image in
 	u8 * buf = malloc(maxSize);
 	if(buf==NULL) {
 		printf("Out of memory (allocating %zu bytes).\n", maxSize);
-		return 101;
+		return 102;
 	}
 
+	// Set identifier as RLE image
 	buf[0] = 0x08;
 	buf[1] = 0x21;
 
@@ -489,34 +499,34 @@ int compressImg(Img * img) {
 
 	// For each line
 	for(u32 y=0; y<img->h; y++) {
-		u8 c[2] = { 0 };
+		u8 prev[2] = { 0 };
 		u8 runLength = 0;
 		for(u32 x=0; x<img->w; x++) {
-			u8 p[2];
-			p[0] = img->data[y*img->w*2 + x*2];
-			p[1] = img->data[y*img->w*2 + x*2 + 1];
+			u8 curr[2];
+			curr[0] = img->data[y*img->w*2 + x*2];
+			curr[1] = img->data[y*img->w*2 + x*2 + 1];
 			if(x==0) {
-				c[0] = p[0];
-				c[1] = p[1];
+				prev[0] = curr[0];
+				prev[1] = curr[1];
 				runLength = 1;
 				continue;
 			} 
-			if(p[0] != c[0] || p[1] != c[1]) {
+			if(curr[0] != prev[0] || curr[1] != prev[1]) {
 				// end the run and start a new one
-				buf[offset]   = c[0];
-				buf[offset+1] = c[1];
+				buf[offset]   = prev[0];
+				buf[offset+1] = prev[1];
 				buf[offset+2] = runLength;
 				offset += 3;
-				c[0] = p[0];
-				c[1] = p[1];
+				prev[0] = curr[0];
+				prev[1] = curr[1];
 				runLength = 1;
-			} else { //if(p[0]==c[0] && p[1]==c[1])
+			} else {
 				// increase the run
 				runLength ++;
 				if(runLength==255) {
 					// save and restart the run
-					buf[offset]   = c[0];
-					buf[offset+1] = c[1];
+					buf[offset]   = prev[0];
+					buf[offset+1] = prev[1];
 					buf[offset+2] = runLength;
 					offset += 3;
 					runLength = 0;
@@ -525,8 +535,8 @@ int compressImg(Img * img) {
 		}
 		// save remaining run, if anything
 		if(runLength > 0) {
-			buf[offset]   = c[0];
-			buf[offset+1] = c[1];
+			buf[offset]   = prev[0];
+			buf[offset+1] = prev[1];
 			buf[offset+2] = runLength;
 			offset += 3;
 		}
@@ -535,7 +545,7 @@ int compressImg(Img * img) {
 			free(buf);
 			return 0; // success, but not compressed
 		}
-		((u16*)(&buf[2+y*2]))[0] = (u16)offset;
+		set_u16(&buf[2+y*2], (u16)offset);
 	}
 
 	// Check if the size is better
@@ -554,7 +564,7 @@ int compressImg(Img * img) {
 	free(img->data);
 	img->data = buf;
 	img->size = offset;
-	img->compression = 1;
+	img->compression = RLE_LINE;
 	return 0;
 }
 

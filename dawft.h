@@ -45,6 +45,8 @@ typedef int32_t i32;
 // gets a LE u32, without care for alignment or system byte order
 #define get_u32(p) (u32)( ((const u8*)p)[0] | (((const u8*)p)[1] << 8) | (((const u8*)p)[2] << 16) | (((const u8*)p)[3] << 24) )
 
+// sets a LE u16, without care for alignment or system byte order
+void set_u16(u8 * p, u16 v);
 
 //----------------------------------------------------------------------------
 //  EXPORTED STRUCTS
