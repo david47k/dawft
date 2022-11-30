@@ -48,6 +48,17 @@ static u16 RGB888to565(u8 * buf) {
     return output;
 }
 
+static u16 ARGB8888to565(u8 * buf) {
+	// u8 a = buf[0] // ignore alpha channel
+	u8 r = buf[1];
+	u8 g = buf[2];
+	u8 b = buf[3];
+    u16 output = 0;
+    output |= (r & 0xF8) >> 3;            // 5 bits
+    output |= (g & 0xFC) << 3;            // 6 bits
+    output |= (b & 0xF8) << 8;            // 5 bits
+    return output;
+}
 
 //----------------------------------------------------------------------------
 //  SETBMPHEADER - Set up a BMPHeaderClassic or BMPHeaderV4 struct
@@ -332,8 +343,8 @@ Img * newImgFromFile(char * filename) {
 		fail = 1;
 	}
 
-	if(h->bpp != 16 && h->bpp != 24) {
-		printf("ERROR: BMP must be RGB565 or RGB888.\n");
+	if(h->bpp != 16 && h->bpp != 24 && h->bpp != 32) {
+		printf("ERROR: BMP must be RGB565 or RGB888 or ARGB8888.\n");
 		fail = 1;
 	}
 	
@@ -342,8 +353,8 @@ Img * newImgFromFile(char * filename) {
 		fail = 1;
 	}
 	
-	if(h->bpp == 24 && h->compressionType != 0) {
-		printf("ERROR: BMP of 24bpp must be uncompressed.\n");
+	if((h->bpp == 24 || h->bpp == 32) && h->compressionType != 0) {
+		printf("ERROR: BMP of 24/32bpp must be uncompressed.\n");
 		fail = 1;
 	}
 
@@ -436,13 +447,18 @@ Img * newImgFromFile(char * filename) {
 		}
 
 		// done!
-	} else { // RGB888
+	} else { // RGB888 or ARGB8888
 	    // read in data, row by row, pixel by pixel
 		for(u32 y=0; y < img->h; y++) {
 			u32 row = topDown ? y : (img->h - y - 1);
 			size_t bmpOffset = h->offset + row * rowSize;
 			for(u32 x=0; x < img->w; x++) {
-				u16 pixel = RGB888to565(&bytes->data[bmpOffset + x * 3]);
+				u16 pixel;
+				if(h->bpp == 24) {
+					pixel = RGB888to565(&bytes->data[bmpOffset + x * 3]);
+				} else { // h->bpp == 32
+					pixel = ARGB8888to565(&bytes->data[bmpOffset + x * 4]);
+				}
 				img->data[y * img->w * 2 + 2 * x]     = pixel >> 8;
 				img->data[y * img->w * 2 + 2 * x + 1] = pixel & 0xFF;
 			}

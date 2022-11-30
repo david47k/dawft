@@ -212,7 +212,7 @@ static const DataType dataTypes[] = {
 	{ 0x72, "STEPS_B", 			10, "Step count, left aligned, digits, alternate." },
 	{ 0x73, "STEPS_B_CA", 		10, "Step count, centre aligned, digits, alternate." },
 	{ 0x74, "STEPS_B_RA", 		10, "Step count, right aligned, digits, alternate." },
-	{ 0x76, "STEPS_GOAL", 		1,  "Step goal, left aligned, digits." },
+	{ 0x76, "STEPS_GOAL", 		10, "Step goal, left aligned, digits." },
 	{ 0x80, "HR_PROGBAR", 		11, "Heart rate, progress bar 0,10,20...100%. 11 frames." },
 	{ 0x81, "HR_LOGO", 			1,  "Heart rate, static logo." },
 	{ 0x82, "HR_B", 			10,	"Heart rate, left aligned, digits, alternate." },
