@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <sys/stat.h>		// for mkdir()
+#include <assert.h>
 
 #include "dawft.h"
 #include "bmp.h"
@@ -38,7 +39,7 @@ static int systemIsLittleEndian() {				// return 0 for big endian, 1 for little 
     return (*((volatile uint8_t*)(&i))) == 0x67;
 }
 
-void set_u16(u8 * p, u16 v) {
+inline void set_u16(u8 * p, u16 v) {
     p[0] = v&0xFF;
     p[1] = v>>8;
 }
@@ -50,10 +51,10 @@ void set_u16(u8 * p, u16 v) {
 
 /***
 
-fileType	FaceData size	Offset table start		Decompression required for offset table		RLE bitmap has line index	Different resolutions?
-TYPE A 		6				200						No											No							No - always 240x240
-TYPE B		10				400						Yes	(LZO?)									N/A							Yes
-TYPE C 		10				400						No											Yes							Yes
+fileType	FaceData size	Offset table start		Compression method				Different resolutions?
+TYPE A 		6				200						NONE/RLE_BASIC					No - always 240x240
+TYPE B		10				400						LZO of all data (not header)	Yes
+TYPE C 		10				400						NONE/RLE_LINE					Yes
 
 
 For reference:
@@ -245,9 +246,9 @@ static const DataType dataTypes[] = {
 	{ 0xF3, "HAND_SEC", 		1,	"Analog time second hand, at 1200 position." },
 	{ 0xF4, "HAND_PIN_UPPER", 	1,  "Top half of analog time centre pin." },
 	{ 0xF5, "HAND_PIN_LOWER", 	1,  "Bottom half of analog time centre pin." },
-	{ 0xF6, "TAP_TO_CHANGE", 	3,  "Series of images. Tap to change. Count is specified by animationFrames." },		// On #3156, #5315. #3135 has it as 3 images. Frame count at 1400 (Type C) or 1600 (Type A).
-	{ 0xF7, "ANIMATION",	 	7,  "Animation. Count is specified by animationFrames." }, 							// #3145, #163.  #3087, #3088 has it as a 7-frame animation. #3163 has it as a 36 frame animation. Frame count at 1400 (Type C) or 1600 (Type A)..
-	{ 0xF8, "ANIMATION_F8",   	10, "Animation. Count is specified by animationFrames." }, 				// #3085, #3086. #3112 has it as a 14-frame animation. #3248 has it as a 10-frame animation. Frame count at 1400 (Type C) or 1600 (Type A).
+	{ 0xF6, "TAP_TO_CHANGE", 	1,  "Series of images. Tap to change. Count is specified by animationFrames." },		// On #3156, #5315. #3135 has it as 3 images. Frame count at 1400 (Type C) or 1600 (Type A).
+	{ 0xF7, "ANIMATION",	 	1,  "Animation. Count is specified by animationFrames." }, 							// #3145, #163.  #3087, #3088 has it as a 7-frame animation. #3163 has it as a 36 frame animation. Frame count at 1400 (Type C) or 1600 (Type A)..
+	{ 0xF8, "ANIMATION_F8",   	1,  "Animation. Count is specified by animationFrames." }, 				// #3085, #3086. #3112 has it as a 14-frame animation. #3248 has it as a 10-frame animation. Frame count at 1400 (Type C) or 1600 (Type A).
 };		
 								
 static const char dataTypeStrUnknown[12] = "UNKNOWN";
@@ -379,6 +380,8 @@ static int dumpBlob(char * fileName, u8 * srcData, size_t length) {
 
 		size_t rval = fwrite(&srcData[idx],1,bytesToWrite,dumpFile);
 		if(rval != bytesToWrite) {
+			fclose(dumpFile);
+			remove(fileName);
 			return 2;
 		}
 		idx += bytesToWrite;
@@ -575,10 +578,33 @@ static int createBin(char * srcFolder, char * outputFileName) {
 		snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%04u.bmp", srcFolder, DIR_SEPERATOR, i);
 		Img * img = newImgFromFile(fileNameBuf);
 		if(img == NULL) {
-			printf("ERROR: Unable to load image from file '%s'\n", fileNameBuf);
-			fclose(binFile);
-			// Could delete the binfile here...
-			return 1;
+			printf("WARNING: Unable to load image from file '%s', looking for .raw file...\n", fileNameBuf);
+			snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%04u.raw", srcFolder, DIR_SEPERATOR, i);
+			Bytes * rawBytes = newBytesFromFile(fileNameBuf);
+			if(rawBytes == NULL) {
+				printf("ERROR: Unable to load raw file '%s'. Giving up on this image.\n", fileNameBuf);
+				h.offsets[i] = offset; // save something in the offset table...
+				continue;
+			}
+
+			// save the data offset to appropriate place in offset table
+			h.offsets[i] = offset;
+			offset += rawBytes->size;
+
+			// save the raw data to the binfile
+			size_t r1 = fwrite(rawBytes->data, 1, rawBytes->size, binFile);
+			if(r1 != rawBytes->size) {
+				printf("ERROR: Unable to write raw data to output file.\n");
+				deleteBytes(rawBytes);
+				fclose(binFile);
+				remove(outputFileName);
+				deleteImg(img);
+				return 1;
+			}
+			
+			printf("'%s' loaded. Size %7zu.\n", fileNameBuf, rawBytes->size);
+			deleteBytes(rawBytes);
+			continue;
 		}
 
 		if(blobCompression[i] != NONE) {
@@ -586,6 +612,7 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			if(r != 0) {
 				printf("ERROR: compressImg() failed with error code %d\n", r);
 				fclose(binFile);
+				remove(outputFileName);
 				deleteImg(img);
 				return 1;
 			}
@@ -599,8 +626,8 @@ static int createBin(char * srcFolder, char * outputFileName) {
 		size_t r1 = fwrite(img->data, 1, img->size, binFile);
 		if(r1 != img->size) {
 			printf("ERROR: Unable to write image to output file.\n");
-			// Could delete the binfile here...
 			fclose(binFile);
+			remove(outputFileName);
 			deleteImg(img);
 			return 1;
 		}
@@ -614,8 +641,8 @@ static int createBin(char * srcFolder, char * outputFileName) {
 	size_t r = fwrite((u8 *)&h, 1, sizeof(FaceHeader), binFile);
 	if(r != sizeof(FaceHeader)) {
 		printf("ERROR: Unable to write header to output file.\n");
-		// Could delete the binfile here...
 		fclose(binFile);
+		remove(outputFileName);
 		return 1;
 	}
 
@@ -775,14 +802,14 @@ int main(int argc, char * argv[]) {
 	}
 
 	// store discovered data in string, for saving to file, so we can recreate this bin file
-	char watchFaceStr[(39+5)*100] = "";		// have enough room for all the lines we need to store
+	char watchFaceStr[32000] = "";		// have enough room for all the lines we need to store
 	char lineBuf[128] = "";
 
 	snprintf(lineBuf, sizeof(lineBuf), "fileType        %c\n", fileType);
-	strcat(watchFaceStr, lineBuf);
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 
 	snprintf(lineBuf, sizeof(lineBuf), "fileID          0x%02x\n", fileData[0]);
-	strcat(watchFaceStr, lineBuf);
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 
 
 
@@ -793,11 +820,11 @@ int main(int argc, char * argv[]) {
 
 	// Print header info
 	snprintf(lineBuf, sizeof(lineBuf), "dataCount       %u\n", h->dataCount);
-	strcat(watchFaceStr, lineBuf);
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 	snprintf(lineBuf, sizeof(lineBuf), "blobCount       %u\n", h->blobCount);
-	strcat(watchFaceStr, lineBuf);
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 	snprintf(lineBuf, sizeof(lineBuf), "faceNumber      %u\n", h->faceNumber);
-	strcat(watchFaceStr, lineBuf);
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 
 	// Print faceData header info
 	FaceData * background = NULL;
@@ -810,7 +837,7 @@ int main(int argc, char * argv[]) {
 			snprintf(lineBuf, sizeof(lineBuf), "faceData        0x%02x  %04u  %-15s %4u %4u %4u %4u\n",
 				fd->type, fd->idx, getDataTypeStr(fd->type), fd->x, fd->y, fd->w, fd->h
 				);
-			strcat(watchFaceStr, lineBuf);
+			d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 			myDataCount++;
 			if(fd->type == 0x01 && background == NULL) {
 				background = &h->faceData[i];
@@ -830,7 +857,7 @@ int main(int argc, char * argv[]) {
 
 	if(xfi.animationFrames != 0) {
 		snprintf(lineBuf, sizeof(lineBuf), "animationFrames %u\n", xfi.animationFrames);
-		strcat(watchFaceStr, lineBuf);
+		d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 	}
 
 
@@ -868,7 +895,7 @@ int main(int argc, char * argv[]) {
 					blobEstSize[i] = (int)fileSize - (int)headerSize - (int)h->offsets[i];
 				}
 				snprintf(lineBuf, sizeof(lineBuf), "blobCompression %04u  %-9s  %8u  %8i\n", i, ImgCompressionStr[ic], h->offsets[i], blobEstSize[i]);
-				strcat(watchFaceStr, lineBuf);
+				d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 			}
 		} 
 	}
@@ -923,6 +950,7 @@ int main(int argc, char * argv[]) {
 			printf("ERROR: Failed when writing to '%s'\n", dumpFileName);
 			deleteBytes(bytes);
 			fclose(fwf);
+			remove(dumpFileName);
 			return 1;
 		}
 		fclose(fwf);
@@ -931,19 +959,41 @@ int main(int argc, char * argv[]) {
 		for(int i=0; i<h->blobCount; i++) {
 			// determine file offset
 			u32 fileOffset = headerSize + h->offsets[i];
+			bool rawDumpThisOne = false;
 			
 			// get faceData index from offset index
 			int fdi = getFaceDataIndexFromOffsetIndex(i, h, &xfi);
 
 			// is it RLE?
 			int isRLE = (get_u16(&fileData[fileOffset]) == 0x2108);
+			
+			// Dump the bitmaps
+			if(fdi != -1) {
+				if(h->faceData[fdi].type == 0x00 && (fileType=='A') && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
+					// override width and height
+					h->faceData[fdi].w = 240;
+					h->faceData[fdi].h = 24;
+					printf("WARNING: Overriding width and height with 240x24 for backgrounds of type 0x00\n");
+				}
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
+				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
+			} else if(i == (h->blobCount - 1)) {
+				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
+				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, 140, 163, (fileType=='A'));
+			} else {	// it's just rubbish data... but we should dump it for completeness
+				rawDumpThisOne = true;
+			}
 
-			if(raw) {
+			// Dump the raw data
+			if(raw || rawDumpThisOne) {
 				// determine size of blob
 				size_t size = h->sizes[i]; // Sometimes, length is stored in file, but this is unreliable, and that section is used for other purposes
 				if(blobEstSize[i] >= 0) {
 					size = (size_t)blobEstSize[i];
-					if(h->sizes[i] > 0) {
+					if(h->sizes[i] > 0 && h->sizes[i] != size) {
 						printf("WARNING: Overriding unreliable zone size %u with estimated size %zu\n", h->sizes[i], size);
 					}
 				}
@@ -965,38 +1015,20 @@ int main(int argc, char * argv[]) {
 					// check it won't go past EOF
 					if(fileOffset + size > fileSize) {
 						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+size, fileSize);
-						// this seems funky...
-						continue;
-					}
-					// assemble file name to dump to
-					snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, DIR_SEPERATOR, i);
-					printf("Dumping raw blob size %6zu to file %s\n", size ,dumpFileName);
+					} else {
+						// assemble file name to dump to
+						snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, DIR_SEPERATOR, i);
+						printf("Dumping raw blob size %6zu to file %s\n", size ,dumpFileName);
 
-					// dump it
-					int rval = dumpBlob(dumpFileName, &fileData[fileOffset], size);
-					if(rval != 0) {
-						printf("Failed to write data to file: '%s'\n", dumpFileName);
+						// dump it
+						int rval = dumpBlob(dumpFileName, &fileData[fileOffset], size);
+						if(rval != 0) {
+							printf("Failed to write data to file: '%s'\n", dumpFileName);
+						}
 					}
 				}
 			}
-			
-			// Dump the bitmaps
-			if(fdi != -1) {
-				if(h->faceData[fdi].type == 0x00 && (fileType=='A') && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
-					// override width and height
-					h->faceData[fdi].w = 240;
-					h->faceData[fdi].h = 24;
-					printf("WARNING: Overriding width and height with 240x24 for backgrounds of type 0x00\n");
-				}
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
-				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
-				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
-			} else if(i == (h->blobCount - 1)) {
-				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
-				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
-				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, 140, 163, (fileType=='A'));
-			}
+
 		}
 	}
 

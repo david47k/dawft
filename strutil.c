@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
+#include <assert.h>
 #include "strutil.h"
 
 // Non-destructive string token finder.
@@ -75,4 +77,22 @@ uint32_t readNum(char * s) {
         }
     }
     return total;
+}
+
+// Append src to end of dst string.
+// Probably not compatible with other strlcat, but should be safe.
+// dstSize is total size of dst buffer. Returns new length of dst. 
+size_t d_strlcat(char * dst, const char * src, size_t dstSize) {
+	size_t dstLen = strlen(dst);
+	assert(dstLen < dstSize);		// dstLen shouldn't be bigger than dstSize, full stop. 
+	if(dstLen >= (dstSize - 1)) {	// this will catch if the assert is optimised out.
+		return dstLen;				// buffer already full.
+	}
+	size_t i = 0;
+	while(src[i] != 0 && (dstLen + i) < (dstSize - 1)) {
+		dst[dstLen + i] = src[i];
+		i++;
+	}
+	dst[dstLen + i] = 0;
+	return(dstLen + i);
 }

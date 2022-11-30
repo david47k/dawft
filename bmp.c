@@ -126,7 +126,7 @@ void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
 	}
 */
 
-int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u32 imgHeight, u8 oldRLE) {	
+int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u32 imgHeight, bool basicRLE) {	
 	// Check we have at least a little data available
 	if(srcDataSize < 2) {
 		printf("ERROR: srcDataSize < 2 bytes!\n");
@@ -145,7 +145,7 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 
 	u8 buf[8192];
 	if(destRowSize > sizeof(buf)) {
-		printf("Image width exceeds buffer size!\n");
+		printf("ERROR: Image width exceeds buffer size!\n");
 		return 3;
 	}
 
@@ -159,18 +159,21 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 	size_t rval = fwrite(&bmpHeader,1,sizeof(bmpHeader),dumpFile);
 	if(rval != sizeof(bmpHeader)) {
 		fclose(dumpFile);
+		remove(filename);
 		return 2;
 	}
 
-	if(isRLE && !oldRLE) {
-		// The newer RLE style has a table at the start with the offsets of each row. (lineRLE)
+	if(isRLE && !basicRLE) {
+		// The newer RLE style has a table at the start with the offsets of each row. (RLE_LINE)
 		u8 * lineEndOffset = &srcData[2];
 		size_t srcIdx = (2 * imgHeight) + 2; // offset from start of RLEImage to RLEData
 
 		// The srcDataSize must be at least get_u16(&lineEndOffset[imgHeight*2]) 
 		size_t dataEnd = get_u16(&lineEndOffset[(imgHeight-1)*2]) - 1;		// This marks the last byte location, plus one.
 		if(srcIdx > srcDataSize || dataEnd > srcDataSize) {
-			printf("ERROR: Insufficient srcData to decode RLE image\n");
+			printf("ERROR: Insufficient srcData to decode RLE image.\n");
+			fclose(dumpFile);
+			remove(filename);
 			return 101;
 		}
 
@@ -201,11 +204,12 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 			rval = fwrite(buf,1,destRowSize,dumpFile);
 			if(rval != destRowSize) {
 				fclose(dumpFile);
+				remove(filename);
 				return 2;
 			}
 		}
-	} else if(isRLE && oldRLE) {        // TODO: Fix read (buffer overun) here...
-		// This is an OLD RLE style, with no offsets at the start, and no concern for row boundaries
+	} else if(isRLE && basicRLE) {
+		// This is an OLD RLE style, with no offsets at the start, and no concern for row boundaries. RLE_BASIC.
 		u32 srcIdx = 2;		
 		u8 pixel0 = 0;
 		u8 pixel1 = 0;
@@ -225,7 +229,7 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 			}
 			while(pixelCount < imgWidth) {
 				if(srcIdx+2 >= srcDataSize) {	// Check we have enough data to continue
-					printf("ERROR: Insufficient srcData for OldRLE image\n");
+					printf("ERROR: Insufficient srcData for RLE_BASIC image.\n");
 					return 102;
 				}
 				count = srcData[srcIdx + 2];
@@ -249,13 +253,14 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 			rval = fwrite(buf, 1, destRowSize, dumpFile);
 			if(rval != destRowSize) {
 				fclose(dumpFile);
+				remove(filename);
 				return 2;
 			}
 		}
 	} else {
 		// Basic RGB565 data
 		if(imgHeight * imgWidth * 2 > srcDataSize) {
-			printf("ERROR: Insufficient srcData for RGB565 image\n");
+			printf("ERROR: Insufficient srcData for RGB565 image.\n");
 			return 103;
 		}
 		// for each row
@@ -273,6 +278,8 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 
 			rval = fwrite(buf,1,destRowSize,dumpFile);
 			if(rval != destRowSize) {
+				fclose(dumpFile);
+				remove(filename);
 				return 2;
 			}
 			srcIdx += srcRowSize;
@@ -477,7 +484,7 @@ int compressImg(Img * img) {
 	size_t minSize = (2 + img->h * 2) + (img->w + 255) / 255 * 3 * img->h;
 
 	if(minSize > 65535) { // we can't store 16-bit offsets in a bigger file
-		printf("Image too large to be RLE_LINE encoded.\n");
+		printf("Note: Image too large to be RLE_LINE encoded.\n");
 		return 101;
 	}
 
@@ -486,7 +493,7 @@ int compressImg(Img * img) {
 	// Allocate a stack of RAM to keep the image in
 	u8 * buf = malloc(maxSize);
 	if(buf==NULL) {
-		printf("Out of memory (allocating %zu bytes).\n", maxSize);
+		printf("ERROR: Out of memory (allocating %zu bytes).\n", maxSize);
 		return 102;
 	}
 
@@ -557,7 +564,7 @@ int compressImg(Img * img) {
 	// Free the original data and store the new data
 	buf = realloc(buf, offset);	// remove any excess memory allocation
 	if(buf == NULL) {
-		printf("ERROR: realloc() failure\n");
+		printf("ERROR: realloc() failure.\n");
 		return 5;
 	}
 	

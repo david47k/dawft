@@ -13,10 +13,10 @@ release: $(SRCFILES)
 	$(CC) $(CFLAGS) -s -O2 $^ -o $(EXE)
 
 debug: $(SRCFILES)
-	$(CC) -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer $^ -o $(EXE)
+	$(CC) -g -Og -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer $^ -o $(EXE)
 
 debuggcc: $(SRCFILES)
-	$(GCC) $(CFLAGS) -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
+	$(GCC) $(CFLAGS) -g -Og -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
 
 win: $(SRCFILES)
 	$(WIN32CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x86.exe
