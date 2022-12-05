@@ -203,7 +203,7 @@ static const DataType dataTypes[] = {
 	{ 0x64, "STEPS_RA", 		10,	"Step count, right aligned, digits." }, 
 	{ 0x65, "HR", 				10, "Heart rate, left aligned, digits. (Assumed)." },
 	{ 0x66, "HR_CA", 			10, "Heart rate, centre aligned, digits. (Assumed)." },
-	{ 0x67, "HR_RA", 			10, "Heart rate, right aligned, digits." },
+	{ 0x67, "HR_RA", 			10, "Heart rate, right aligned, digits." }, 
 	{ 0x68, "KCAL", 			10, "kCals, left aligned, digits." },
 	{ 0x6b, "MONTH_NUM_B", 		10,	"Month, digits, alternate." },
 	{ 0x6c, "DAY_NUM_B", 		10,	"Day number of the month, digits, alternate." },
@@ -239,7 +239,7 @@ static const DataType dataTypes[] = {
 	{ 0xD3, "BATT_CA", 			10, "Battery level, centre aligned, digits." },
 	{ 0xD4, "BATT_RA", 			10, "Battery level, right aligned, digits." },
 	{ 0xDA, "BATT_IMG_D", 		1,  "Battery level image, alternate." },
-	{ 0xD8, "WEATHER_TEMP_CA", 	10, "Weather temperature, centre aligned, digits." },
+	{ 0xD8, "WEATHER_TEMP_CA", 	11, "Weather temperature, centre aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F." },
 	{ 0xF0, "SEPERATOR", 		1,	"Static image used as date or time seperator e.g. / or :." },
 	{ 0xF1, "HAND_HOUR", 		1,	"Analog time hour hand, at 1200 position." },
 	{ 0xF2, "HAND_MINUTE", 		1,  "Analog time minute hand, at 1200 position." },
@@ -274,7 +274,7 @@ static int getDataTypeIdx(u8 type) {
 }
 
 static int printTypes() {
-	printf("DATA TYPES FOR BINARY WATCH FACE FILES\nNote: Width and height of digits is of a single digit (bitmap).\n\n");
+	printf("DATA TYPES FOR BINARY WATCH FACE FILES\nNote: Width and height of digits is of a single digit (bitmap). Digits will be printed with 2px spacing.\n\n");
 	printf("Code  Name              Count  Description\n");	
 	u32 typeCount = sizeof(dataTypes)/sizeof(DataType);
 	for(u32 i=0; i<typeCount; i++) {
@@ -285,7 +285,7 @@ static int printTypes() {
 }
 
 
-// Find the faceData index given an offset index
+// Find the faceData index given an offset index. Returns -1 for failure, index for success.
 static int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h, ExtraFileInfo * xfi) {
 	int matchIdx = -1;
 	for(int fdi=0; fdi < h->dataCount; fdi++) {
@@ -311,7 +311,7 @@ static int getFaceDataIndexFromOffsetIndex(int offsetIndex, FaceHeader * h, Extr
 //  NEWBYTESFROMFILE - read entire file into memory
 //----------------------------------------------------------------------------
 
-// Read file into struct Bytes. Delete with deleteBytes.
+// Read file into struct Bytes. Delete with deleteBytes. 0123456sss
 Bytes * newBytesFromFile(char * fileName) {
 	// Open the binary input file
     FILE * f = fopen(fileName, "rb");
@@ -335,7 +335,6 @@ Bytes * newBytesFromFile(char * fileName) {
 	}
 
 	b->size = fileSize;	
-
  	// Read whole file
 	if(fread(b->data, 1, fileSize, f) != fileSize) {
 		printf("ERROR: Read failed.\n");
@@ -585,6 +584,13 @@ static int createBin(char * srcFolder, char * outputFileName) {
 				printf("ERROR: Unable to load raw file '%s'. Giving up on this image.\n", fileNameBuf);
 				h.offsets[i] = offset; // save something in the offset table...
 				continue;
+			}
+
+			int fdi = getFaceDataIndexFromOffsetIndex(i, &h, &efi);
+			if(fdi != -1) {
+				if(h.faceData[fdi].w != img->w || h.faceData[fdi].h != img->h) {
+					printf("WARNING: Width/Height mismatch for bitmap %04u. File: %ux%u, faceData(type 0x%02X): %ux%u\n", i, img->w, img->h, h.faceData[fdi].type, h.faceData[fdi].w, h.faceData[fdi].h);
+				}
 			}
 
 			// save the data offset to appropriate place in offset table

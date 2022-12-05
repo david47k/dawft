@@ -38,25 +38,25 @@ static RGBTrip RGB565to888(u16 pixel) {
 }
 
 static u16 RGB888to565(u8 * buf) {
-	u8 r = buf[0];
+	u8 b = buf[0];
 	u8 g = buf[1];
-	u8 b = buf[2];
+	u8 r = buf[2];
     u16 output = 0;
-    output |= (r & 0xF8) >> 3;            // 5 bits
+    output |= (b & 0xF8) >> 3;            // 5 bits
     output |= (g & 0xFC) << 3;            // 6 bits
-    output |= (b & 0xF8) << 8;            // 5 bits
+    output |= (r & 0xF8) << 8;            // 5 bits
     return output;
 }
 
 static u16 ARGB8888to565(u8 * buf) {
+	u8 b = buf[0];
+	u8 g = buf[1];
+	u8 r = buf[2];
 	// u8 a = buf[0] // ignore alpha channel
-	u8 r = buf[1];
-	u8 g = buf[2];
-	u8 b = buf[3];
-    u16 output = 0;
-    output |= (r & 0xF8) >> 3;            // 5 bits
+	u16 output = 0;
+    output |= (b & 0xF8) >> 3;            // 5 bits
     output |= (g & 0xFC) << 3;            // 6 bits
-    output |= (b & 0xF8) << 8;            // 5 bits
+    output |= (r & 0xF8) << 8;            // 5 bits
     return output;
 }
 
@@ -333,7 +333,7 @@ Img * newImgFromFile(char * filename) {
 		fail = 1;
 	}
 
-	if(h->dibHeaderSize != 40 && h->dibHeaderSize != 108 && h->dibHeaderSize != (108+12)) {
+	if(h->dibHeaderSize != 40 && h->dibHeaderSize != 108 && h->dibHeaderSize != 124) {
 		printf("ERROR: BMP header format unrecognised.\n");
 		fail = 1;
 	}
@@ -353,7 +353,7 @@ Img * newImgFromFile(char * filename) {
 		fail = 1;
 	}
 	
-	if((h->bpp == 24 || h->bpp == 32) && h->compressionType != 0) {
+	if((h->bpp == 24 || h->bpp == 32) && (h->compressionType != 0 && h->compressionType != 3)) {
 		printf("ERROR: BMP of 24/32bpp must be uncompressed.\n");
 		fail = 1;
 	}
@@ -448,6 +448,16 @@ Img * newImgFromFile(char * filename) {
 
 		// done!
 	} else { // RGB888 or ARGB8888
+		// check bitfields (if they exist) are what we expect
+		if(h->compressionType == 3) {
+			if(h->bmiColors[0] != 0xFF0000 || h->bmiColors[1] != 0x00FF00 || h->bmiColors[2] != 0x0000FF) {
+				printf("ERROR: BMP bitfields are not what we expect (RGB888).\n");
+				deleteBytes(bytes);
+				deleteImg(img);
+				return NULL;
+			}
+		}
+
 	    // read in data, row by row, pixel by pixel
 		for(u32 y=0; y < img->h; y++) {
 			u32 row = topDown ? y : (img->h - y - 1);
