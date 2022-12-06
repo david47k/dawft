@@ -10,7 +10,7 @@
 // Tokens are seperated by any amount of ' ' or \t.
 // Tokens are printable ascii.
 // Anything else ends the string.
-// Maximum 8 tokens read.
+// Maximum 10 tokens read.
 // Pass in a c string and an (allocated) TokensIdx struct.
 void getTokensIdx(char * s, TokensIdx * t) {
 	t->count = 0;
@@ -24,12 +24,18 @@ void getTokensIdx(char * s, TokensIdx * t) {
 			if(wasSpace) {
 				t->idx[t->count] = i;
 				t->ptr[t->count] = &s[i];
+                t->length[t->count] = 1;
 				t->count++;
+                if(t->count == 10) {
+                   finished = true;
+                }
 				wasSpace = false;
-			}
+			} else if(t->count > 0) {
+                t->length[t->count - 1] += 1;
+            }
 		} else {
 			finished = true;
-		}
+		}       
 	}
 }
 

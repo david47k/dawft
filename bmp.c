@@ -28,23 +28,31 @@ const char * ImgCompressionStr[8] = { "NONE", "RLE_LINE", "RLE_BASIC", "RESERVED
 static RGBTrip RGB565to888(u16 pixel) {	
 	pixel = swap_bo_u16(pixel);				// need to reverse the source pixel
 	RGBTrip output;
-	output.r = (u8)((pixel & 0x001F) << 3);		// first 5 bits
-	output.r |= (pixel & 0x001C) >> 3;			// add extra precision of 3 bits
+	output.b = (u8)((pixel & 0x001F) << 3);		// first 5 bits
+	output.b |= (pixel & 0x001C) >> 3;			// add extra precision of 3 bits
 	output.g = (pixel & 0x07E0) >> 3;			// first 6 bits
 	output.g |= (pixel & 0x0600) >> 9;			// add extra precision of 2 bits
-	output.b = (pixel & 0xF800) >> 8;			// first 5 bits
-	output.b |= (pixel & 0xE000) >> 13;			// add extra precision of 3 bits
+	output.r = (pixel & 0xF800) >> 8;			// first 5 bits
+	output.r |= (pixel & 0xE000) >> 13;			// add extra precision of 3 bits
 	return output;
 }
 
 static u16 RGB888to565(u8 * buf) {
+    u16 output = 0;
 	u8 b = buf[0];
 	u8 g = buf[1];
 	u8 r = buf[2];
-    u16 output = 0;
-    output |= (b & 0xF8) >> 3;            // 5 bits
+	output |= (b & 0xF8) >> 3;            // 5 bits
     output |= (g & 0xFC) << 3;            // 6 bits
     output |= (r & 0xF8) << 8;            // 5 bits
+    return output;
+}
+
+static u16 RGBTripTo565(RGBTrip * t) {
+    u16 output = 0;
+    output |= (t->b & 0xF8) >> 3;            // 5 bits
+    output |= (t->g & 0xFC) << 3;            // 6 bits
+    output |= (t->r & 0xF8) << 8;            // 5 bits
     return output;
 }
 
@@ -308,8 +316,86 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 //  IMG, newIMG, deleteIMG - read bitmap file into basic RGB565 data format
 //----------------------------------------------------------------------------
 
+// Does the file have an alpha channel?
+// Returns 1 for true, 0 for false, and -1 for error
+int bmpFileHasAlpha(char * filename) {
+    // read in the whole file
+	Bytes * bytes = newBytesFromFile(filename);
+	if(bytes==NULL) {
+		printf("ERROR: Unable to read file.\n");
+		return -1;
+	}
+
+	if(bytes->size < BASIC_BMP_HEADER_SIZE) {
+		printf("ERROR: File is too small.\n");
+		deleteBytes(bytes);
+		return -1;
+	}
+
+    // process the header
+	BMPHeaderClassic * h = (BMPHeaderClassic *)bytes->data;
+
+	int fail = 0;
+	if(h->sig != 0x4D42) {
+		printf("ERROR: BMP file is not a bitmap.\n");
+		fail = 1;
+	}
+
+	if(h->dibHeaderSize != 40 && h->dibHeaderSize != 108 && h->dibHeaderSize != 124) {
+		printf("ERROR: BMP header format unrecognised.\n");
+		fail = 1;
+	}
+
+	if(h->planes != 1 || h->reserved1 != 0 || h->reserved2 != 0) {
+		printf("ERROR: BMP is unusual, can't read it.\n");
+		fail = 1;
+	}
+
+	if(h->bpp != 16 && h->bpp != 24 && h->bpp != 32) {
+		printf("ERROR: BMP must be RGB565 or RGB888 or ARGB8888.\n");
+		fail = 1;
+	}
+	
+	if(h->bpp == 16 && h->compressionType != 3) {
+		printf("ERROR: BMP of 16bpp doesn't have bitfields.\n");
+		fail = 1;
+	}
+	
+	if((h->bpp == 24 || h->bpp == 32) && (h->compressionType != 0 && h->compressionType != 3)) {
+		printf("ERROR: BMP of 24/32bpp must be uncompressed.\n");
+		fail = 1;
+	}
+
+	if(fail) {
+		deleteBytes(bytes);
+		return -1;
+	}
+
+	// Check if it's a top-down or bottom-up BMP. Normalise height to be positive.
+	bool topDown = false;
+	if(h->height < 0) {
+		topDown = true;
+		h->height = -h->height;
+	}
+
+	if(h->height < 1 || h->width < 1) {
+		printf("ERROR: BMP has no dimensions!\n");
+		deleteBytes(bytes);
+		return -1;
+	}
+
+	if(h->bpp == 32) {
+		deleteBytes(bytes);
+		return 1;	// recognised alpha format
+	}
+
+	deleteBytes(bytes);
+	return 0; // not a recognised alpha format
+}
+
 // Allocate Img and fill it with pixels from a bmp file. Returns NULL for failure. Delete with deleteImg.
-Img * newImgFromFile(char * filename) {
+// If bmp file has alpha, and backgroundImg != NULL, use the alpha channel to blend.
+Img * newImgFromFile(char * filename, Img * backgroundImg, u32 bpx, u32 bpy) {
     // read in the whole file
 	Bytes * bytes = newBytesFromFile(filename);
 	if(bytes==NULL) {
@@ -441,13 +527,47 @@ Img * newImgFromFile(char * filename) {
 				u8 temp = *a;
 				*a = *b;
 				*b = temp;
-				//u16 * ptr = (u16*)&img->data[y*img->w*2 + j];
-				//*ptr = swap_bo_u16(*ptr);
 			}
 		}
 
 		// done!
-	} else { // RGB888 or ARGB8888
+	} else if (h->bpp == 32 && backgroundImg != NULL && h->dibHeaderSize > 40) { 	// ARGB8888 to be blended against backgroundImg
+		BMPHeaderV4 * h4 = (BMPHeaderV4 *)&h;
+		// check bitfields (if they exist) are what we expect
+		if(h->compressionType == 3) {
+			if(h4->RGBAmasks[0] != 0xFF000000 || h4->RGBAmasks[1] != 0x00FF0000 || h4->RGBAmasks[2] != 0x0000FF00 || h4->RGBAmasks[3] != 0x000000FF) {
+				printf("ERROR: BMP bitfields are not what we expect for 32-bit image (ARGB8888).\n");
+				deleteBytes(bytes);
+				deleteImg(img);
+				return NULL;
+			}
+		}
+
+	    // read in data, row by row, pixel by pixel
+		for(u32 y=0; y < img->h; y++) {
+			u32 row = topDown ? y : (img->h - y - 1);
+			size_t bmpOffset = h->offset + row * rowSize;
+			for(u32 x=0; x < img->w; x++) {
+				// get partner pixel from backgroundImg
+				u16 pixelIn = get_u16(&backgroundImg->data[2 * backgroundImg->w * (bpy+y) + 2 * (bpx+x)]);
+				RGBTrip bgPixel = RGB565to888(pixelIn);
+
+				// get bmp pixel
+				u8 b = bytes->data[bmpOffset + x * 4];
+				u8 g = bytes->data[bmpOffset + x * 4 + 1];
+				u8 r = bytes->data[bmpOffset + x * 4 + 2];
+				u8 a = bytes->data[bmpOffset + x * 4 + 3];
+
+				bgPixel.r = (u8)(((u32)(255 - a) * (u32)bgPixel.r + (u32)a * (u32)r) / 255);
+				bgPixel.g = (u8)(((u32)(255 - a) * (u32)bgPixel.g + (u32)a * (u32)g) / 255);
+				bgPixel.b = (u8)(((u32)(255 - a) * (u32)bgPixel.b + (u32)a * (u32)b) / 255);
+
+				u16 pixelOut = RGBTripTo565(&bgPixel);
+				img->data[y * img->w * 2 + 2 * x]     = pixelOut >> 8;
+				img->data[y * img->w * 2 + 2 * x + 1] = pixelOut & 0xFF;
+			}
+		}
+	} else { // RGB888 (or ARGB8888 with no background to blend against)
 		// check bitfields (if they exist) are what we expect
 		if(h->compressionType == 3) {
 			if(h->bmiColors[0] != 0xFF0000 || h->bmiColors[1] != 0x00FF00 || h->bmiColors[2] != 0x0000FF) {
@@ -493,6 +613,27 @@ Img * deleteImg(Img * i) {
         i = NULL;
     }
 	return i;
+}
+
+Img * cloneImg(Img * i) {
+	// Allocate memory to store ImageData and data
+	Img * img = malloc(sizeof(Img));
+	if(img == NULL) {
+		printf("ERROR: Out of memory.\n");
+		return NULL;
+	}	
+	img->w = i->w;
+	img->h = i->h;
+	img->compression = i->compression;
+	img->size = i->size;
+	img->data = malloc(img->size);
+	if(img->data == NULL) {
+		printf("ERROR: Out of memory.\n");
+		deleteImg(img);
+		return NULL;
+	}
+	memcpy(img->data, i->data, img->size);
+	return img;
 }
 
 //----------------------------------------------------------------------------

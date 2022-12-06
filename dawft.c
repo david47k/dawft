@@ -225,7 +225,7 @@ static const DataType dataTypes[] = {
 	{ 0x94, "KCAL_B_RA", 		10, "kCals, right aligned, digits." },
 	{ 0xA0, "DIST_PROGBAR", 	11, "Distance progress bar 0,10,20...100%. 11 frames." },
 	{ 0xA1, "DIST_LOGO", 		1, 	"Distance, static logo." },
-	{ 0xA2, "DIST", 			10, "Distance, left aligned, digits." },
+	{ 0xA2, "DIST", 			10, "Distance, left aligned, digits." },		// Has a decimal point - how wide?
 	{ 0xA3, "DIST_CA", 			10, "Distance, centre aligned, digits." },
 	{ 0xA4, "DIST_RA", 			10, "Distance, right aligned, digits." },
 	{ 0xA5, "DIST_KM", 			1,  "Distance unit 'KM'." },
@@ -239,7 +239,9 @@ static const DataType dataTypes[] = {
 	{ 0xD3, "BATT_CA", 			10, "Battery level, centre aligned, digits." },
 	{ 0xD4, "BATT_RA", 			10, "Battery level, right aligned, digits." },
 	{ 0xDA, "BATT_IMG_D", 		1,  "Battery level image, alternate." },
-	{ 0xD8, "WEATHER_TEMP_CA", 	11, "Weather temperature, centre aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F." },
+	{ 0xD7, "WEATHER_TEMP", 	13, "Weather temperature, left aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F." },
+	{ 0xD8, "WEATHER_TEMP_CA", 	13, "Weather temperature, centre aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F." },
+	{ 0xD9, "WEATHER_TEMP_RA", 	13, "Weather temperature, right aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F." },
 	{ 0xF0, "SEPERATOR", 		1,	"Static image used as date or time seperator e.g. / or :." },
 	{ 0xF1, "HAND_HOUR", 		1,	"Analog time hour hand, at 1200 position." },
 	{ 0xF2, "HAND_MINUTE", 		1,  "Analog time minute hand, at 1200 position." },
@@ -474,6 +476,7 @@ static int createBin(char * srcFolder, char * outputFileName) {
 	char * ptr = NULL;
 	u32 lineNumber = 1;
 	ImgCompression blobCompression[250] = { TRY_RLE };
+	char blobFileNames[250][256] = { 0 };
 
 	#define printWarning(s) printf("WARNING: in watchface.txt line %u: %s.\n", lineNumber, s)
 	#define printError(s) printf("ERROR: in watchface.txt line %u: %s.\n", lineNumber, s)
@@ -523,13 +526,43 @@ static int createBin(char * srcFolder, char * outputFileName) {
 				printWarning("Insufficient tokens for faceData");
 				continue;
 			}
-			h.faceData[h.dataCount].type = (u8)readNum(tok.ptr[1]);
-			h.faceData[h.dataCount].idx = (u8)readNum(tok.ptr[2]);
+			FaceData * fd = &h.faceData[h.dataCount];
+			fd->type = (u8)readNum(tok.ptr[1]);
+			fd->idx = (u8)readNum(tok.ptr[2]);
 			// tok3 is name of type. I guess it's a TODO to read it instead of the type code...
-			h.faceData[h.dataCount].x = (u16)readNum(tok.ptr[4]);
-			h.faceData[h.dataCount].y = (u16)readNum(tok.ptr[5]);
-			h.faceData[h.dataCount].w = (u16)readNum(tok.ptr[6]);
-			h.faceData[h.dataCount].h = (u16)readNum(tok.ptr[7]);
+			fd->x = (u16)readNum(tok.ptr[4]);
+			fd->y = (u16)readNum(tok.ptr[5]);
+			fd->w = (u16)readNum(tok.ptr[6]);
+			fd->h = (u16)readNum(tok.ptr[7]);
+
+			// handle a filename, if we're given one
+			if((tok.count >= 9) && tok.length[8] < 256) {
+				// get the filename
+				char buf[256] = { 0 };
+				memcpy(&buf[0], tok.ptr[8], tok.length[8]);
+				// see if it makes sense
+				// we assume the last 7 characters are [0-9][0-9][0-9].bmp
+				if(strlen(buf) < 7) {
+					// don't bother with this one
+					printf("blobFileName specified isn't in the required prefix[0-9][0-9][0-9].bmp format\n");
+				} else {				
+					// save it to all the following blob file names
+					u32 offset = (u32)strlen(buf) - 7;
+					u32 num = readNum(&buf[offset]);
+					u32 count = 1;
+					int dti = getDataTypeIdx(fd->type);
+					if(dti != -1) {
+						count = dataTypes[dti].count;
+					}
+					// TODO: Make sure ANIMATIONS have the correct count (and weather, etc.)
+					for(u32 j=0; j<count; j++) {
+						sprintf(&buf[offset], "%03u.bmp", num+j);
+						//printf("Determined file name for blob %03u would be: '%s'\n", fd->idx + j, buf);
+						strcpy(blobFileNames[fd->idx + j], buf);
+					}
+				}
+			}
+
 			h.dataCount ++;
 		} else {
 			printWarning("Unrecognised token");
@@ -571,26 +604,40 @@ static int createBin(char * srcFolder, char * outputFileName) {
 	// start at the appropriate offset
 	fseek(binFile, sizeof(FaceHeader), SEEK_SET);
 
+	// if we find the background image, save it for alpha blending
+	Img * backgroundImg = NULL;
+
 	u32 offset = 0;
 	// read and dump bitmaps
 	for(int i=0; i<h.blobCount; i++) {
-		snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%04u.bmp", srcFolder, DIR_SEPERATOR, i);
-		Img * img = newImgFromFile(fileNameBuf);
+		// get faceData for this blob, if it exists
+		int fdi = getFaceDataIndexFromOffsetIndex(i, &h, &efi);
+		FaceData * fd = NULL;
+		if(fdi != -1) {
+			fd = &h.faceData[fdi];
+		}
+
+		// Try and load the image from the file
+		snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%03u.bmp", srcFolder, DIR_SEPERATOR, i);
+		if(blobFileNames[i][0] != 0) {			
+			snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%s", srcFolder, DIR_SEPERATOR, blobFileNames[i]);
+		}
+		Img * img = NULL;
+		if(fd != NULL) {			
+			img = newImgFromFile(fileNameBuf, backgroundImg, fd->x, fd->y);
+		} else {
+			img = newImgFromFile(fileNameBuf, NULL, 0, 0);
+		}
+		
 		if(img == NULL) {
+			// Couldn't load the image. Try loading a raw blob instead.
 			printf("WARNING: Unable to load image from file '%s', looking for .raw file...\n", fileNameBuf);
-			snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%04u.raw", srcFolder, DIR_SEPERATOR, i);
+			snprintf(fileNameBuf, sizeof(fileNameBuf), "%s%s%03u.raw", srcFolder, DIR_SEPERATOR, i);
 			Bytes * rawBytes = newBytesFromFile(fileNameBuf);
 			if(rawBytes == NULL) {
 				printf("ERROR: Unable to load raw file '%s'. Giving up on this image.\n", fileNameBuf);
 				h.offsets[i] = offset; // save something in the offset table...
 				continue;
-			}
-
-			int fdi = getFaceDataIndexFromOffsetIndex(i, &h, &efi);
-			if(fdi != -1) {
-				if(h.faceData[fdi].w != img->w || h.faceData[fdi].h != img->h) {
-					printf("WARNING: Width/Height mismatch for bitmap %04u. File: %ux%u, faceData(type 0x%02X): %ux%u\n", i, img->w, img->h, h.faceData[fdi].type, h.faceData[fdi].w, h.faceData[fdi].h);
-				}
 			}
 
 			// save the data offset to appropriate place in offset table
@@ -613,6 +660,23 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			continue;
 		}
 
+		// check the image makes sense when compared to the faceData item
+		if(fd != NULL) {
+			if(fd->w != img->w || fd->h != img->h) {
+				if(fd->type >= 0xD7 && fd->type <= 0xD9) {
+					// ignore weather - it has double-width bitmaps
+				} else {
+					printf("WARNING: Width/Height mismatch for bitmap %03u. File: %ux%u, faceData(type 0x%02X): %ux%u\n", i, img->w, img->h, fd->type, fd->w, fd->h);
+				}
+			}
+
+			// if it's a background, in top left corner, let's save it for possible alpha blending
+			if(fd->type == 0x01 && fd->x == 0 && fd->y == 0 && backgroundImg == NULL) {
+				backgroundImg = cloneImg(img);
+			}
+		}
+
+		// compress the image, if it saves space and aren't told otherwise
 		if(blobCompression[i] != NONE) {
 			int r = compressImg(img);
 			if(r != 0) {
@@ -641,6 +705,9 @@ static int createBin(char * srcFolder, char * outputFileName) {
 		printf("'%s' loaded. Size %7u.\n", fileNameBuf, img->size);
 		deleteImg(img);
 	}
+
+	// dispose of background image, if we used it
+	backgroundImg = deleteImg(backgroundImg);
 
 	// dump header
 	fseek(binFile, 0, SEEK_SET);
@@ -840,7 +907,7 @@ int main(int argc, char * argv[]) {
 	for(u32 i=0; i<(sizeof(h->faceData)/sizeof(h->faceData[0])); i++) {
 		if(h->faceData[i].type != 0 || i==0) {		// some formats use type 0 in position 0 as background
 			FaceData * fd = &h->faceData[i];			
-			snprintf(lineBuf, sizeof(lineBuf), "faceData        0x%02x  %04u  %-15s %4u %4u %4u %4u\n",
+			snprintf(lineBuf, sizeof(lineBuf), "faceData        0x%02x  %03u  %-15s %4u %4u %4u %4u\n",
 				fd->type, fd->idx, getDataTypeStr(fd->type), fd->x, fd->y, fd->w, fd->h
 				);
 			d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
@@ -900,7 +967,7 @@ int main(int argc, char * argv[]) {
 				} else {
 					blobEstSize[i] = (int)fileSize - (int)headerSize - (int)h->offsets[i];
 				}
-				snprintf(lineBuf, sizeof(lineBuf), "blobCompression %04u  %-9s  %8u  %8i\n", i, ImgCompressionStr[ic], h->offsets[i], blobEstSize[i]);
+				snprintf(lineBuf, sizeof(lineBuf), "blobCompression %03u  %-9s  %8u  %8i\n", i, ImgCompressionStr[ic], h->offsets[i], blobEstSize[i]);
 				d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 			}
 		} 
@@ -975,18 +1042,28 @@ int main(int argc, char * argv[]) {
 			
 			// Dump the bitmaps
 			if(fdi != -1) {
+				u32 width = h->faceData[fdi].w;
+				u32 height = h->faceData[fdi].h;
 				if(h->faceData[fdi].type == 0x00 && (fileType=='A') && (h->faceData[fdi].w != 240 || h->faceData[fdi].h != 24)) {
 					// override width and height
 					h->faceData[fdi].w = 240;
 					h->faceData[fdi].h = 24;
+					width = 240;
+					height = 24;
 					printf("WARNING: Overriding width and height with 240x24 for backgrounds of type 0x00\n");
 				}
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				if((h->faceData[fdi].type >= 0xD7 && h->faceData[fdi].type <= 0xD9) && i > (h->faceData[fdi].idx + 10)) {
+					// override width
+					width = width * 2;
+					printf("WARNING: Overriding width and height for double-width degC degF 0xD7-0xD9\n");
+				}
+
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%03u.bmp", folderStr, DIR_SEPERATOR, i);
 				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
-				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, h->faceData[fdi].w, h->faceData[fdi].h, (fileType=='A'));
+				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, width, height, (fileType=='A'));
 			} else if(i == (h->blobCount - 1)) {
 				// this is a small preview image of 140x163, used when selecting backgrounds (for 240x280 images)
-				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.bmp", folderStr, DIR_SEPERATOR, i);
+				snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%03u.bmp", folderStr, DIR_SEPERATOR, i);
 				printf("Dumping from %s img to BMP file %s\n", (isRLE?"RLE":"unc"), dumpFileName);
 				dumpBMP16(dumpFileName, &fileData[fileOffset], fileSize-fileOffset, 140, 163, (fileType=='A'));
 			} else {	// it's just rubbish data... but we should dump it for completeness
@@ -1016,14 +1093,14 @@ int main(int argc, char * argv[]) {
 				}
 
 				if(size == 0) {
-					printf("WARNING: Unable to determine size for blob idx %04d, not dumping raw data.\n", i);
+					printf("WARNING: Unable to determine size for blob idx %03u, not dumping raw data.\n", i);
 				} else {
 					// check it won't go past EOF
 					if(fileOffset + size > fileSize) {
 						printf("WARNING: Unable to dump raw blob %u as it exceeds EOF (%zu>%zu)\n", i, fileOffset+size, fileSize);
 					} else {
 						// assemble file name to dump to
-						snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%04d.raw", folderStr, DIR_SEPERATOR, i);
+						snprintf(dumpFileName, sizeof(dumpFileName), "%s%s%03u.raw", folderStr, DIR_SEPERATOR, i);
 						printf("Dumping raw blob size %6zu to file %s\n", size ,dumpFileName);
 
 						// dump it

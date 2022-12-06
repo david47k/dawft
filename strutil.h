@@ -2,9 +2,9 @@
 
 typedef struct _TokensIdx {
 	uint32_t count;			// number of tokens found
-	uint32_t idx[8];	    // start index of each token
-	char * ptr[8];  		// pointer to start of each token
-	// uint32_t length;  	// length of token in bytes or chars
+	uint32_t idx[10];	    // start index of each token
+	char * ptr[10];  		// pointer to start of each token
+	uint32_t length[10];  		// length of token in bytes or chars
 } TokensIdx;
 
 void getTokensIdx(char * s, TokensIdx * t);

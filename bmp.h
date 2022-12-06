@@ -71,7 +71,7 @@ typedef struct _RGBTrip {
 void setBMPHeaderClassic(BMPHeaderClassic * dest, u32 width, u32 height, u8 bpp);
 void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp);
 int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u32 imgHeight, bool basicRLE);
-
+int bmpFileHasAlpha(char * filename);
 
 //----------------------------------------------------------------------------
 //  IMG - STORE BASIC IMAGE DATA
@@ -95,6 +95,7 @@ typedef enum _ImgCompression {
 
 extern const char * ImgCompressionStr[8];
 
-Img * newImgFromFile(char * filename);
+Img * newImgFromFile(char * filename, Img * backgroundImg, u32 bpx, u32 bpy);
 Img * deleteImg(Img * i);
+Img * cloneImg(Img * i);
 int compressImg(Img * img);
