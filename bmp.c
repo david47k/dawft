@@ -18,8 +18,8 @@
 #include "dawft.h"
 #include "bmp.h"
 
-
 const char * ImgCompressionStr[8] = { "NONE", "RLE_LINE", "RLE_BASIC", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "TRY_RLE" };
+
 
 //----------------------------------------------------------------------------
 //  RGB565 to RGB888 conversion
@@ -56,17 +56,6 @@ static u16 RGBTripTo565(RGBTrip * t) {
     return output;
 }
 
-static u16 ARGB8888to565(u8 * buf) {
-	u8 b = buf[0];
-	u8 g = buf[1];
-	u8 r = buf[2];
-	// u8 a = buf[0] // ignore alpha channel
-	u16 output = 0;
-    output |= (b & 0xF8) >> 3;            // 5 bits
-    output |= (g & 0xFC) << 3;            // 6 bits
-    output |= (r & 0xF8) << 8;            // 5 bits
-    return output;
-}
 
 //----------------------------------------------------------------------------
 //  SETBMPHEADER - Set up a BMPHeaderClassic or BMPHeaderV4 struct
@@ -128,8 +117,6 @@ void setBMPHeaderV4(BMPHeaderV4 * dest, u32 width, u32 height, u8 bpp) {
 	dest->hres = 2835;								// 72dpi
 	dest->vres = 2835;								// 72dpi
 }
-
-
 
 
 //----------------------------------------------------------------------------
@@ -315,83 +302,6 @@ int dumpBMP16(char * filename, u8 * srcData, size_t srcDataSize, u32 imgWidth, u
 //----------------------------------------------------------------------------
 //  IMG, newIMG, deleteIMG - read bitmap file into basic RGB565 data format
 //----------------------------------------------------------------------------
-
-// Does the file have an alpha channel?
-// Returns 1 for true, 0 for false, and -1 for error
-int bmpFileHasAlpha(char * filename) {
-    // read in the whole file
-	Bytes * bytes = newBytesFromFile(filename);
-	if(bytes==NULL) {
-		printf("ERROR: Unable to read file.\n");
-		return -1;
-	}
-
-	if(bytes->size < BASIC_BMP_HEADER_SIZE) {
-		printf("ERROR: File is too small.\n");
-		deleteBytes(bytes);
-		return -1;
-	}
-
-    // process the header
-	BMPHeaderClassic * h = (BMPHeaderClassic *)bytes->data;
-
-	int fail = 0;
-	if(h->sig != 0x4D42) {
-		printf("ERROR: BMP file is not a bitmap.\n");
-		fail = 1;
-	}
-
-	if(h->dibHeaderSize != 40 && h->dibHeaderSize != 108 && h->dibHeaderSize != 124) {
-		printf("ERROR: BMP header format unrecognised.\n");
-		fail = 1;
-	}
-
-	if(h->planes != 1 || h->reserved1 != 0 || h->reserved2 != 0) {
-		printf("ERROR: BMP is unusual, can't read it.\n");
-		fail = 1;
-	}
-
-	if(h->bpp != 16 && h->bpp != 24 && h->bpp != 32) {
-		printf("ERROR: BMP must be RGB565 or RGB888 or ARGB8888.\n");
-		fail = 1;
-	}
-	
-	if(h->bpp == 16 && h->compressionType != 3) {
-		printf("ERROR: BMP of 16bpp doesn't have bitfields.\n");
-		fail = 1;
-	}
-	
-	if((h->bpp == 24 || h->bpp == 32) && (h->compressionType != 0 && h->compressionType != 3)) {
-		printf("ERROR: BMP of 24/32bpp must be uncompressed.\n");
-		fail = 1;
-	}
-
-	if(fail) {
-		deleteBytes(bytes);
-		return -1;
-	}
-
-	// Check if it's a top-down or bottom-up BMP. Normalise height to be positive.
-	bool topDown = false;
-	if(h->height < 0) {
-		topDown = true;
-		h->height = -h->height;
-	}
-
-	if(h->height < 1 || h->width < 1) {
-		printf("ERROR: BMP has no dimensions!\n");
-		deleteBytes(bytes);
-		return -1;
-	}
-
-	if(h->bpp == 32) {
-		deleteBytes(bytes);
-		return 1;	// recognised alpha format
-	}
-
-	deleteBytes(bytes);
-	return 0; // not a recognised alpha format
-}
 
 // Allocate Img and fill it with pixels from a bmp file. Returns NULL for failure. Delete with deleteImg.
 // If bmp file has alpha, and backgroundImg != NULL, use the alpha channel to blend.
@@ -587,7 +497,7 @@ Img * newImgFromFile(char * filename, Img * backgroundImg, u32 bpx, u32 bpy) {
 				if(h->bpp == 24) {
 					pixel = RGB888to565(&bytes->data[bmpOffset + x * 3]);
 				} else { // h->bpp == 32
-					pixel = ARGB8888to565(&bytes->data[bmpOffset + x * 4]);
+					pixel = RGB888to565(&bytes->data[bmpOffset + x * 4]); // ignore alpha channel
 				}
 				img->data[y * img->w * 2 + 2 * x]     = pixel >> 8;
 				img->data[y * img->w * 2 + 2 * x + 1] = pixel & 0xFF;
@@ -635,6 +545,7 @@ Img * cloneImg(Img * i) {
 	memcpy(img->data, i->data, img->size);
 	return img;
 }
+
 
 //----------------------------------------------------------------------------
 //  COMPRESS IMG - Compress using (RLE_LINE) if it shrinks the size

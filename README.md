@@ -94,6 +94,15 @@ Code  Name              Count  Description
 0xf8  ANIMATION_F8      10     Animation. Count is specified by animationFrames.
 ```
 
+## Supported image formats
+```
+Export: Windows BMP: 16-bit RGB565.   The binary watch face files only support RGB565.
+Import: Windows BMP: 16-bit RGB565.
+                     24-bit RGB888.   Will be converted to RGB565 by the program.
+                     32-bit ARGB8888. The program will attempt basic alpha blending against the background image.
+                                      Note that the watch itself does NOT support an alpha channel.
+```
+
 ## Supported watches
 All Da Fit watches (using MoYoung v2 firmware) should be supported to some extent.
 Currently, only type A and type C watches are supported for unpacking. Type B watches are coming soon.
