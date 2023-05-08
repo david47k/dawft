@@ -23,6 +23,11 @@ Usage:   dawft MODE [OPTIONS] [FILENAME]
         FILENAME               Binary watch face file for input (or output). Required for info/dump/create.
 ```
 
+To build an example watch face:
+```
+dawft create folder=example1 example1.bin
+```
+
 ## watchface.txt format
 Try dumping an existing watch face to get an idea of how watchface.txt works for your particular watch model.
 
@@ -80,7 +85,7 @@ Filename = db000.bmp. This is the bitmap data for the first of the 10 digits 0-9
 ### Data types
 ```
 DATA TYPES FOR BINARY WATCH FACE FILES
-Note: Width and height of digits is of a single digit (bitmap).
+Note: Width and height of digits is of a single digit (bitmap). Digits will be printed with 2px spacing.
 
 Code  Name              Count  Description
 0x00  BACKGROUNDS       10     Background (10 parts of 240x24). May contain example time (will be overwritten). Seen in Type A faces.
@@ -111,7 +116,7 @@ Code  Name              Count  Description
 0x72  STEPS_B           10     Step count, left aligned, digits, alternate.
 0x73  STEPS_B_CA        10     Step count, centre aligned, digits, alternate.
 0x74  STEPS_B_RA        10     Step count, right aligned, digits, alternate.
-0x76  STEPS_GOAL         1     Step goal, left aligned, digits.
+0x76  STEPS_GOAL        10     Step goal, left aligned, digits.
 0x80  HR_PROGBAR        11     Heart rate, progress bar 0,10,20...100%. 11 frames.
 0x81  HR_LOGO            1     Heart rate, static logo.
 0x82  HR_B              10     Heart rate, left aligned, digits, alternate.
@@ -138,16 +143,18 @@ Code  Name              Count  Description
 0xd3  BATT_CA           10     Battery level, centre aligned, digits.
 0xd4  BATT_RA           10     Battery level, right aligned, digits.
 0xda  BATT_IMG_D         1     Battery level image, alternate.
-0xd8  WEATHER_TEMP_CA   10     Weather temperature, centre aligned, digits.
+0xd7  WEATHER_TEMP      13     Weather temperature, left aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F.
+0xd8  WEATHER_TEMP_CA   13     Weather temperature, centre aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F.
+0xd9  WEATHER_TEMP_RA   13     Weather temperature, right aligned, 11 digits (0-9 and -) and a special 12 & 13th double-width characters for deg. C and deg. F.
 0xf0  SEPERATOR          1     Static image used as date or time seperator e.g. / or :.
 0xf1  HAND_HOUR          1     Analog time hour hand, at 1200 position.
 0xf2  HAND_MINUTE        1     Analog time minute hand, at 1200 position.
 0xf3  HAND_SEC           1     Analog time second hand, at 1200 position.
 0xf4  HAND_PIN_UPPER     1     Top half of analog time centre pin.
 0xf5  HAND_PIN_LOWER     1     Bottom half of analog time centre pin.
-0xf6  TAP_TO_CHANGE      3     Series of images. Tap to change. Count is specified by animationFrames.
-0xf7  ANIMATION          7     Animation. Count is specified by animationFrames.
-0xf8  ANIMATION_F8      10     Animation. Count is specified by animationFrames.
+0xf6  TAP_TO_CHANGE      1     Series of images. Tap to change. Count is specified by animationFrames.
+0xf7  ANIMATION          1     Animation. Count is specified by animationFrames.
+0xf8  ANIMATION_F8       1     Animation. Count is specified by animationFrames.
 ```
 
 ## Supported image formats
