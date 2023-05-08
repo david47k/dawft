@@ -1,4 +1,4 @@
-# Da Watch Face Tool (dawft)+
+# Da Watch Face Tool (dawft)
 Tool for MO YOUNG / DA FIT binary watch face files. Allows you to dump (unpack) or create the files.
 
 ## Building
