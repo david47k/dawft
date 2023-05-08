@@ -297,7 +297,7 @@ static int getDataTypeIdx(u8 type) {
 static int printTypes() {
 	printf("DATA TYPES FOR BINARY WATCH FACE FILES\n");
 	printf("Note: Width and height of digits is of a single digit (bitmap). Digits will be printed with 2px spacing.\n");
-	printf("Code  Name              Count  Description\n");	
+	printf("\nCode  Name              Count  Description\n");	
 	u32 typeCount = sizeof(dataTypes)/sizeof(DataType);
 	for(u32 i=0; i<typeCount; i++) {
 		printf("0x%02x  %-16s  %2u     %s\n", dataTypes[i].type, dataTypes[i].str, dataTypes[i].count, dataTypes[i].description);	
