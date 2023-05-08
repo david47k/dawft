@@ -83,10 +83,10 @@ Parameter  | Value       | Description
 -----------|-------------|------------
 Data Type  | 0x12        | Looking at the table below, this is a *Year, 2 digits, left aligned*.
 Index      | 001         | Starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 (for digits 0 to 9).
-X          | 0           | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
-Y          | 0           | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
-Width      | 240         | Each digit will use this much space.
-Height     | 280         | Each digit will use this much space.
+X          | 39          | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
+Y          | 11          | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
+Width      | 12          | Width of a single digit.
+Height     | 18          | Height of a single digit.
 Filename   | db000.bmp   | This is the bitmap data for the first of the 10 digits, 0 to 9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc. 
 
 
@@ -218,6 +218,6 @@ Tpls | Screen width x height (pixels) | File type | Example models | Example cod
 
 
 ## Uploading the watch face
-You can use [dawfu - da watch face uploader](https://github.com/david47k/dawfu).
+You can use [Da Watch Face Uploader](https://github.com/david47k/dawfu).
 
 ## Other Da Fit / Mo Young watch projects
