@@ -1,0 +1,59 @@
+fileType       C
+fileID         0x81
+dataCount      5
+blobCount      42
+faceNumber     50002
+
+#              TYPE  INDEX      X    Y    W    H    FILENAME
+faceData       0x01    000      0    0  240  280	background000.bmp    # BACKGROUND
+faceData       0x40    001     31  105   40   70	corb000.bmp          # TIME_H1   
+faceData       0x41    011     71  105   40   70	corb000.bmp          # TIME_H2
+faceData       0x43    021    128  105   40   70	corb000.bmp          # TIME_M1
+faceData       0x44    031    168  105   40   70	corb000.bmp          # TIME_M2
+
+# note how we are using the same source bitmaps (starting with corb000.bmp)
+# but as we have specified different blob indexes, they will be copied and 
+# the alpha blending reattempted for each of the H1/H2/M1/M2 digits.
+
+# don't try to compress the digits
+#             INDEX  CTYPE
+blobCompression 001  NONE
+blobCompression 002  NONE
+blobCompression 003  NONE
+blobCompression 004  NONE
+blobCompression 005  NONE
+blobCompression 006  NONE
+blobCompression 007  NONE
+blobCompression 008  NONE
+blobCompression 009  NONE
+blobCompression 010  NONE
+blobCompression 011  NONE
+blobCompression 012  NONE
+blobCompression 013  NONE
+blobCompression 014  NONE
+blobCompression 015  NONE
+blobCompression 016  NONE
+blobCompression 017  NONE
+blobCompression 018  NONE
+blobCompression 019  NONE
+blobCompression 020  NONE
+blobCompression 021  NONE
+blobCompression 022  NONE
+blobCompression 023  NONE
+blobCompression 024  NONE
+blobCompression 025  NONE
+blobCompression 026  NONE
+blobCompression 027  NONE
+blobCompression 028  NONE
+blobCompression 029  NONE
+blobCompression 030  NONE
+blobCompression 031  NONE
+blobCompression 032  NONE
+blobCompression 033  NONE
+blobCompression 034  NONE
+blobCompression 035  NONE
+blobCompression 036  NONE
+blobCompression 037  NONE
+blobCompression 038  NONE
+blobCompression 039  NONE
+blobCompression 040  NONE

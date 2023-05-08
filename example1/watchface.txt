@@ -1,0 +1,70 @@
+fileType       C
+fileID         0x81
+dataCount      18
+blobCount      44
+faceNumber     50001
+
+#              TYPE  INDEX      X    Y    W    H    FILENAME
+faceData       0x01    000      0    0  240  280    background000.bmp   # BACKGROUND
+faceData       0x12    001     39   11   12   18    db000.bmp           # YEAR
+faceData       0x11    001     82   11   12   18    db000.bmp           # MONTH_NUM
+faceData       0x30    001    123   11   12   18    db000.bmp           # DAY_NUM 
+faceData       0x60    011    188   11   41   18    day000.bmp          # DAY_NAME 
+faceData       0x40    018     47   46   29   37    da000.bmp           # TIME_H1     
+faceData       0x41    018     77   46   29   37    da000.bmp           # TIME_H2 
+faceData       0x43    018    133   46   29   37    da000.bmp           # TIME_M1
+faceData       0x44    018    164   46   29   37    da000.bmp           # TIME_M2   
+faceData       0x45    028    207   47   22   36    time_am_000.bmp     # TIME_AM  
+faceData       0x46    029    207   47   22   36    time_pm_000.bmp     # TIME_PM  
+faceData       0x62    030     86  103   10   18    dc000.bmp           # STEPS  
+faceData       0xA2    030     86  133   10   18    dc000.bmp           # DIST  
+faceData       0x68    030     86  163   10   18    dc000.bmp           # KCAL
+faceData       0xD2    030     86  193   10   18    dc000.bmp           # BATT_LA 
+faceData       0xD7    030     86  223   10   18    dc000.bmp           # WEATHER_TEMP
+faceData       0x65    030     86  253   10   18    dc000.bmp           # HR   
+
+# don't try to compress the digits/day names
+#             INDEX  CTYPE
+blobCompression 001  NONE
+blobCompression 002  NONE
+blobCompression 003  NONE
+blobCompression 004  NONE
+blobCompression 005  NONE
+blobCompression 006  NONE
+blobCompression 007  NONE
+blobCompression 008  NONE
+blobCompression 009  NONE
+blobCompression 010  NONE
+blobCompression 011  NONE
+blobCompression 012  NONE
+blobCompression 013  NONE
+blobCompression 014  NONE
+blobCompression 015  NONE
+blobCompression 016  NONE
+blobCompression 017  NONE
+blobCompression 018  NONE
+blobCompression 019  NONE
+blobCompression 020  NONE
+blobCompression 021  NONE
+blobCompression 022  NONE
+blobCompression 023  NONE
+blobCompression 024  NONE
+blobCompression 025  NONE
+blobCompression 026  NONE
+blobCompression 027  NONE
+blobCompression 028  NONE
+blobCompression 029  NONE
+blobCompression 030  NONE
+blobCompression 031  NONE
+blobCompression 032  NONE
+blobCompression 033  NONE
+blobCompression 034  NONE
+blobCompression 035  NONE
+blobCompression 036  NONE
+blobCompression 037  NONE
+blobCompression 038  NONE
+blobCompression 039  NONE
+blobCompression 040  NONE
+blobCompression 041  NONE
+blobCompression 042  NONE
+blobCompression 043  NONE
