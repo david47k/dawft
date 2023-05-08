@@ -39,6 +39,15 @@ void getTokensIdx(char * s, TokensIdx * t) {
 	}
 }
 
+// return 1 if it is a hex or decimal unsigned integer readable by readNum
+// return 0 otherwise
+int isNum(char * s) {
+    size_t len = strlen(s);
+    if(len < 1) return 0;
+    if(s[0] >= '0' && s[0] <= '9') return 1;
+    return 0;
+}
+
 // read hex or decimal unsigned integer digits
 // hex must start with 0x
 // overflow is undefined

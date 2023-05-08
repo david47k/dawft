@@ -255,6 +255,25 @@ static const DataType dataTypes[] = {
 								
 static const char dataTypeStrUnknown[12] = "UNKNOWN";
 
+static int getDataTypeIdxFromStr(const char * s) {
+	int length = sizeof(dataTypes) / sizeof(DataType);
+	for(int i=0; i<length; i++) {
+		if(strcmp(dataTypes[i].str, s)==0 ) {
+			return i;
+		}
+	}
+	return -1; // failed to find
+}
+
+static u8 getDataTypeTypeFromStr(const char * s) {
+	int r = getDataTypeIdxFromStr(s);
+	if(r == -1) {
+		printf("ERROR: Failed to recognise Data Type String '%s'\n", s);
+		exit(EXIT_FAILURE);
+	}
+	return dataTypes[r].type;
+}
+
 static const char * getDataTypeStr(u8 type) {
 	int length = sizeof(dataTypes) / sizeof(DataType);
 	for(int i=0; i<length; i++) {
@@ -276,7 +295,8 @@ static int getDataTypeIdx(u8 type) {
 }
 
 static int printTypes() {
-	printf("DATA TYPES FOR BINARY WATCH FACE FILES\nNote: Width and height of digits is of a single digit (bitmap). Digits will be printed with 2px spacing.\n\n");
+	printf("DATA TYPES FOR BINARY WATCH FACE FILES\n");
+	printf("Note: Width and height of digits is of a single digit (bitmap). Digits will be printed with 2px spacing.\n");
 	printf("Code  Name              Count  Description\n");	
 	u32 typeCount = sizeof(dataTypes)/sizeof(DataType);
 	for(u32 i=0; i<typeCount; i++) {
@@ -522,43 +542,49 @@ static int createBin(char * srcFolder, char * outputFileName) {
 			}
 		} else if(streqn(tok.ptr[0], "faceData", 8)) {
 			// check enough tokens
-			if(tok.count < 8) {
+			if(tok.count < 7) {
 				printWarning("Insufficient tokens for faceData");
 				continue;
 			}
 			FaceData * fd = &h.faceData[h.dataCount];
-			fd->type = (u8)readNum(tok.ptr[1]);
+			// type could be a string:
+			if(isNum(tok.ptr[1])) {
+				fd->type = (u8)readNum(tok.ptr[1]);					// read the data type
+			} else {
+				fd->type = (u8)getDataTypeTypeFromStr(tok.ptr[1]);	// look up string to find the data type
+			}
 			fd->idx = (u8)readNum(tok.ptr[2]);
-			// tok3 is name of type. I guess it's a TODO to read it instead of the type code...
-			fd->x = (u16)readNum(tok.ptr[4]);
-			fd->y = (u16)readNum(tok.ptr[5]);
-			fd->w = (u16)readNum(tok.ptr[6]);
-			fd->h = (u16)readNum(tok.ptr[7]);
-
-			// handle a filename, if we're given one
-			if((tok.count >= 9) && tok.length[8] < 256) {
-				// get the filename
-				char buf[256] = { 0 };
-				memcpy(&buf[0], tok.ptr[8], tok.length[8]);
-				// see if it makes sense
-				// we assume the last 7 characters are [0-9][0-9][0-9].bmp
-				if(strlen(buf) < 7) {
-					// don't bother with this one
-					printf("blobFileName specified isn't in the required prefix[0-9][0-9][0-9].bmp format\n");
-				} else {				
-					// save it to all the following blob file names
-					u32 offset = (u32)strlen(buf) - 7;
-					u32 num = readNum(&buf[offset]);
-					u32 count = 1;
-					int dti = getDataTypeIdx(fd->type);
-					if(dti != -1) {
-						count = dataTypes[dti].count;
-					}
-					// TODO: Make sure ANIMATIONS have the correct count (and weather, etc.)
-					for(u32 j=0; j<count; j++) {
-						sprintf(&buf[offset], "%03u.bmp", num+j);
-						//printf("Determined file name for blob %03u would be: '%s'\n", fd->idx + j, buf);
-						strcpy(blobFileNames[fd->idx + j], buf);
+			fd->x = (u16)readNum(tok.ptr[3]);
+			fd->y = (u16)readNum(tok.ptr[4]);
+			fd->w = (u16)readNum(tok.ptr[5]);
+			fd->h = (u16)readNum(tok.ptr[6]);
+	
+			// handle a filename, if we're given one. it could also be a comment.
+			if(tok.count >= 8) {
+				if(tok.length[7] > 0 && tok.ptr[7][0] != '#' && tok.length[7] < 256) {
+					// get the filename
+					char buf[256] = { 0 };
+					memcpy(&buf[0], tok.ptr[7], tok.length[7]);
+					// see if it makes sense
+					// we assume the last 7 characters are [0-9][0-9][0-9].bmp
+					if(strlen(buf) < 7) {
+						// don't bother with this one
+						printf("blobFileName specified isn't in the required prefix[0-9][0-9][0-9].bmp format\n");
+					} else {
+						// save it to all the following blob file names
+						u32 offset = (u32)strlen(buf) - 7;
+						u32 num = readNum(&buf[offset]);
+						u32 count = 1;
+						int dti = getDataTypeIdx(fd->type);
+						if(dti != -1) {
+							count = dataTypes[dti].count;
+						}
+						// TODO: Make sure ANIMATIONS have the correct count (and weather, etc.)
+						for(u32 j=0; j<count; j++) {
+							sprintf(&buf[offset], "%03u.bmp", num+j);
+							//printf("Determined file name for blob %03u would be: '%s'\n", fd->idx + j, buf);
+							strcpy(blobFileNames[fd->idx + j], buf);
+						}
 					}
 				}
 			}
@@ -898,6 +924,8 @@ int main(int argc, char * argv[]) {
 	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 	snprintf(lineBuf, sizeof(lineBuf), "faceNumber      %u\n", h->faceNumber);
 	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
+	snprintf(lineBuf, sizeof(lineBuf), "\n%s\n", "#               TYPE  INDEX      X    Y    W    H");
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 
 	// Print faceData header info
 	FaceData * background = NULL;
@@ -907,8 +935,8 @@ int main(int argc, char * argv[]) {
 	for(u32 i=0; i<(sizeof(h->faceData)/sizeof(h->faceData[0])); i++) {
 		if(h->faceData[i].type != 0 || i==0) {		// some formats use type 0 in position 0 as background
 			FaceData * fd = &h->faceData[i];			
-			snprintf(lineBuf, sizeof(lineBuf), "faceData        0x%02x  %03u  %-15s %4u %4u %4u %4u\n",
-				fd->type, fd->idx, getDataTypeStr(fd->type), fd->x, fd->y, fd->w, fd->h
+			snprintf(lineBuf, sizeof(lineBuf), "faceData        0x%02x    %03u   %4u %4u %4u %4u          # %-15s\n",
+				fd->type, fd->idx, fd->x, fd->y, fd->w, fd->h, getDataTypeStr(fd->type)
 				);
 			d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 			myDataCount++;
@@ -951,6 +979,8 @@ int main(int argc, char * argv[]) {
 	int myBlobCount = 0;
 	u8 blobCompression[250] = { 0 };
 	int blobEstSize[250] = { 0 };
+	snprintf(lineBuf, sizeof(lineBuf), "\n%s\n", "#             INDEX  CTYPE");
+	d_strlcat(watchFaceStr, lineBuf, sizeof(watchFaceStr));
 	for(u32 i=0; i<250; i++) {
 		if(h->offsets[i] != 0 || i == 0) {
 			myBlobCount += 1;

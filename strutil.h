@@ -8,6 +8,7 @@ typedef struct _TokensIdx {
 } TokensIdx;
 
 void getTokensIdx(char * s, TokensIdx * t);
+int isNum(char * s);
 uint32_t readNum(char * s);
 size_t d_strlcat(char * dst, const char * src, size_t dstSize);
 
