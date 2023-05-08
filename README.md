@@ -105,7 +105,7 @@ Import: Windows BMP: 16-bit RGB565.
 
 ## Supported watches
 All Da Fit watches (using MoYoung v2 firmware) should be supported to some extent.
-Currently, only type A and type C watches are supported for unpacking. Type B watches are coming soon.
+Currently, only type A and type C watches are supported for unpacking.
 Creating new watchfaces is currently only supported for type C watches.
 
 Tpls | Screen width x height (pixels) | File type | Example models | Example codes (starts with MOY-) | Comments 
@@ -144,6 +144,6 @@ Tpls | Screen width x height (pixels) | File type | Example models | Example cod
   60 | 	240 x 284 |  C  |  ?       | ?       | Some faces show 240x280, but have y-offset of 2.  
 
 ## Uploading the watch face
-You can use da_watch_face_uploader.
+You can use [dawfu - da watch face uploader](https://github.com/david47k/dawfu).
 
 ## Other Da Fit / Mo Young watch projects
