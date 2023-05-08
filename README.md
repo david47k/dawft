@@ -1,12 +1,10 @@
 # Da Watch Face Tool
 Watch Face Tool for MO YOUNG / DA FIT binary watch face files. Allows you to dump (unpack) or create the files.
 
-## License
-GNU General Public License version 2 or any later version (GPL-2.0-or-later).
+## Building
+Run `make release` to compile the program using clang, or `make release-gcc` to compile the program using gcc. A windows executable has been pre-built for download (`dawft.x64.exe`).
 
 ## Usage
-Make sure to disconnect your watch first (it will not work if it already has a bluetooth connection). Easiest to just turn off bluetooth on your phone.
-
 ```
 Usage:   dawft MODE [OPTIONS] [FILENAME]
 
@@ -54,32 +52,42 @@ fileID     | 0x81 or 0x04 or 0x84 | Exact meaning yet to be determined.
 dataCount  | integer | How many blob (bitmap) objects to store in the file.
 faceNumber | integer | Design number of this face, just use a basic number that won't clash with an existing face. e.g. 50000.
 animationFrames | integer | Number of frames in the animation (if there is one).
-blobCompression (multiple) | BlobTableIndex CompressionType | What compression to use for each blob. Supported compression types are NONE, RLE_LINE, RLE_BASIC, and TRY_RLE.
-faceData (multiple) | DataType BlobTableIndex X Y Width Height Filename | What to display on the watch face. 
+blobCompression (multiple) | BlobTableIndex, CompressionType | What compression to use for each blob. Supported compression types are NONE, RLE_LINE, RLE_BASIC, and TRY_RLE.
+faceData (multiple) | DataType, BlobTableIndex, X, Y, Width, Height, Filename | What to display on the watch face. 
 
 ### faceData parameters:
 
-For example, looking at the following line:
+Looking at the line:
 ```
 #              TYPE  INDEX         X    Y    W    H     FILENAME
 faceData       0x01    000         0    0  240  280     background000.bmp
 ```
-Data Type = 0x01, so this is a "Background image, usually width and height of screen. Seen in Type B & C faces".  
-Blob Table Index = 000, so first item stored in the blob table.  
-X = 0, Y = 0. The bitmap will be displayed starting at top left of watch face.  
-Width = 240, Height = 280. The bitmap will fill that area of the watch face.  
-Filename = background000.bmp. This is where the bitmap data will be loaded from and stored in the blob table.  
+
+Parameter  | Value       | Description
+-----------|-------------|------------
+Data Type  | 0x01        | Looking at the table below, this is a *Background image, usually width and height of screen. Seen in Type B & C faces*.
+Index      | 000         | First item stored in the blob table.
+X          | 0           | X position of bitmap on screen.
+Y          | 0           | Y position of bitmap on screen.
+Width      | 240         | Width of the bitmap area on the screen.
+Height     | 280         | Height of the bitmap area on the screen.
+Filename   | background000.bmp | This is where the bitmap data will be loaded from, to store in the blob table.
 
 Looking at the line:
 ```
 #              TYPE  INDEX         X    Y    W    H     FILENAME
 faceData       0x12    001        39   11   12   18     db000.bmp
 ```
-Data Type = 0x12. This is a "Year, 2 digits, left aligned".  
-Blob Table Index = 001, so starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 for digits 0 to 9.  
-X = 39, Y = 11. This is where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.  
-Width = 12, Height = 18. Each digit will use this much space.  
-Filename = db000.bmp. This is the bitmap data for the first of the 10 digits 0-9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc.  
+
+Parameter  | Value       | Description
+-----------|-------------|------------
+Data Type  | 0x12        | Looking at the table below, this is a *Year, 2 digits, left aligned*.
+Index      | 001         | Starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 (for digits 0 to 9).
+X          | 0           | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
+Y          | 0           | Where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
+Width      | 240         | Each digit will use this much space.
+Height     | 280         | Each digit will use this much space.
+Filename   | db000.bmp   | This is the bitmap data for the first of the 10 digits, 0 to 9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc. 
 
 
 ### Data types
@@ -159,8 +167,10 @@ Code  Name              Count  Description
 
 ## Supported image formats
 The program supports specific varieties of Windows BMP files only.
-**Export:** Windows BMP, 16-bit RGB565. (The binary watch face files only support RGB565).  
-**Import:** Windows BMP: 
+
+**Export:** Windows BMP, 16-bit RGB565. (The binary watch face files only support RGB565).
+
+**Import:** Windows BMP:  
 - 16-bit RGB565. As is.
 - 24-bit RGB888. Will be converted to RGB565 by the program.
 - 32-bit ARGB8888. The program will attempt basic alpha blending against the background image. Note that the watch itself does NOT support an alpha channel.

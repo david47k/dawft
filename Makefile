@@ -12,14 +12,17 @@ default: debug
 release: $(SRCFILES)
 	$(CC) $(CFLAGS) -s -O2 $^ -o $(EXE)
 
+release-gcc: $(SRCFILES)
+	$(GCC) $(CFLAGS) -s -O2 $^ -o $(EXE)
+
 debug: $(SRCFILES)
 	$(CC) -g -Og -std=c99 -Weverything -fsanitize=address -fno-omit-frame-pointer $^ -o $(EXE)
 
-debuggcc: $(SRCFILES)
+debug-gcc: $(SRCFILES)
 	$(GCC) $(CFLAGS) -g -Og -D_FORTIFY_SOURCE=2 $^ -o $(EXE)
 
 win: $(SRCFILES)
-	$(WIN32CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x86.exe
+#	$(WIN32CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x86.exe
 	$(WIN64CC) $(CFLAGS) -DWINDOWS $^ -o $(EXE).x64.exe
 
 clean:
