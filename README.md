@@ -5,6 +5,8 @@ Watch Face Tool for MO YOUNG / DA FIT binary watch face files. Allows you to dum
 GNU General Public License version 2 or any later version (GPL-2.0-or-later).
 
 ## Usage
+Make sure to disconnect your watch first (it will not work if it already has a bluetooth connection). Easiest to just turn off bluetooth on your phone.
+
 ```
 Usage:   dawft MODE [OPTIONS] [FILENAME]
 
@@ -21,7 +23,61 @@ Usage:   dawft MODE [OPTIONS] [FILENAME]
         FILENAME               Binary watch face file for input (or output). Required for info/dump/create.
 ```
 
-## Data types
+## watchface.txt format
+Try dumping an existing watch face to get an idea of how watchface.txt works for your particular watch model.
+
+Also try looking at examples.
+
+Each line starts with a command and is followed by parameters.
+
+e.g.
+```
+fileType       C
+fileID         0x81
+dataCount      18
+blobCount      44
+faceNumber     50001
+#              TYPE  INDEX         X    Y    W    H     FILENAME
+faceData       0x01    000         0    0  240  280	    background000.bmp
+faceData       0x12    001        39   11   12   18	    db000.bmp
+```
+
+Command    | Parameters  | Description
+-----------|-------------|------------
+fileType   | A or B or C | What type of binary watch face file to create. Depends on watch model.
+fileID     | 0x81 or 0x04 or 0x84 | Exact meaning yet to be determined.
+dataCount  | integer | How many blob (bitmap) objects to store in the file.
+faceNumber | integer | Design number of this face, just use a basic number that won't clash with an existing face. e.g. 50000.
+animationFrames | integer | Number of frames in the animation (if there is one).
+blobCompression (multiple) | BlobTableIndex CompressionType | What compression to use for each blob. Supported compression types are NONE, RLE_LINE, RLE_BASIC, and TRY_RLE.
+faceData (multiple) | DataType BlobTableIndex X Y Width Height Filename | What to display on the watch face. 
+
+### faceData parameters:
+
+For example, looking at the following line:
+```
+#              TYPE  INDEX         X    Y    W    H     FILENAME
+faceData       0x01    000         0    0  240  280	    background000.bmp
+```
+Data Type = 0x01, so this is a "Background image, usually width and height of screen. Seen in Type B & C faces".
+Blob Table Index = 000, so first item stored in the blob table.
+X = 0, Y = 0. The bitmap will be displayed starting at top left of watch face.
+Width = 240, Height = 280. The bitmap will fill that area of the watch face.
+Filename = background000.bmp. This is where the bitmap data will be loaded from and stored in the blob table.
+
+Looking at the line:
+```
+#              TYPE  INDEX         X    Y    W    H     FILENAME
+faceData       0x12    001        39   11   12   18	    db000.bmp
+```
+Data Type = 0x12. This is a "Year, 2 digits, left aligned".
+Blob Table Index = 001, so starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 for digits 0 to 9.
+X = 39, Y = 11. This is where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
+Width = 12, Height = 18. Each digit will use this much space.
+Filename = db000.bmp. This is the bitmap data for the first of the 10 digits 0-9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc.
+
+
+### Data types
 ```
 DATA TYPES FOR BINARY WATCH FACE FILES
 Note: Width and height of digits is of a single digit (bitmap).
@@ -107,6 +163,7 @@ Import: Windows BMP: 16-bit RGB565.
 All Da Fit watches (using MoYoung v2 firmware) should be supported to some extent.
 Currently, only type A and type C watches are supported for unpacking.
 Creating new watchfaces is currently only supported for type C watches.
+Type B watches are compressed, and the decompression has not yet been implemented.
 
 Tpls | Screen width x height (pixels) | File type | Example models | Example codes (starts with MOY-) | Comments 
 -----|------------|-----|----------|---------|--------------
@@ -142,6 +199,7 @@ Tpls | Screen width x height (pixels) | File type | Example models | Example cod
   56 | 	240 x 286 |  C  |  ?       | ?       | Some faces show 240x280, but have y-offset of 3.  
   59 | 	320 x 386 |  C  |  ?       | ?       | Some faces show 320x380, but have y-offset of 3.  
   60 | 	240 x 284 |  C  |  ?       | ?       | Some faces show 240x280, but have y-offset of 2.  
+
 
 ## Uploading the watch face
 You can use [dawfu - da watch face uploader](https://github.com/david47k/dawfu).
