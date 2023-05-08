@@ -1,5 +1,5 @@
-# Da Watch Face Tool
-Watch Face Tool for MO YOUNG / DA FIT binary watch face files. Allows you to dump (unpack) or create the files.
+# Da Watch Face Tool (dawft)+
+Tool for MO YOUNG / DA FIT binary watch face files. Allows you to dump (unpack) or create the files.
 
 ## Building
 Run `make release` to compile the program using clang, or `make release-gcc` to compile the program using gcc. A windows executable has been pre-built for download (`dawft.x64.exe`).
@@ -219,5 +219,3 @@ Tpls | Screen width x height (pixels) | File type | Example models | Example cod
 
 ## Uploading the watch face
 You can use [Da Watch Face Uploader](https://github.com/david47k/dawfu).
-
-## Other Da Fit / Mo Young watch projects
