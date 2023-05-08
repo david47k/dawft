@@ -10,17 +10,17 @@ Make sure to disconnect your watch first (it will not work if it already has a b
 ```
 Usage:   dawft MODE [OPTIONS] [FILENAME]
 
-        MODE:
-            info               Display info about binary file.
-            dump               Dump data from binary file to folder.
-            create             Create binary file from data in folder.
-            print_types        Print the data type codes and description.
-        OPTIONS:
-            folder=FOLDERNAME  Folder to dump data to/read from. Defaults to the face design number.
-                               Required for create.
-            raw=true           When dumping, dump raw files. Default is false.
-            fileType=C         Specify type of binary file (A, B or C). Default is to autodetect or type A.
-        FILENAME               Binary watch face file for input (or output). Required for info/dump/create.
+  MODE:
+    info               Display info about binary file.
+    dump               Dump data from binary file to folder.
+    create             Create binary file from data in folder.
+    print_types        Print the data type codes and description.
+  OPTIONS:
+    folder=FOLDERNAME  Folder to dump data to/read from. Defaults to the face design number.
+                       Required for create.
+    raw=true           When dumping, dump raw files. Default is false.
+    fileType=C         Specify type of binary file (A, B or C). Default is to autodetect or type A.
+  FILENAME               Binary watch face file for input (or output). Required for info/dump/create.
 ```
 
 To build an example watch face:
@@ -43,8 +43,8 @@ dataCount      18
 blobCount      44
 faceNumber     50001
 #              TYPE  INDEX         X    Y    W    H     FILENAME
-faceData       0x01    000         0    0  240  280	    background000.bmp
-faceData       0x12    001        39   11   12   18	    db000.bmp
+faceData       0x01    000         0    0  240  280     background000.bmp
+faceData       0x12    001        39   11   12   18     db000.bmp
 ```
 
 Command    | Parameters  | Description
@@ -62,24 +62,24 @@ faceData (multiple) | DataType BlobTableIndex X Y Width Height Filename | What t
 For example, looking at the following line:
 ```
 #              TYPE  INDEX         X    Y    W    H     FILENAME
-faceData       0x01    000         0    0  240  280	    background000.bmp
+faceData       0x01    000         0    0  240  280     background000.bmp
 ```
-Data Type = 0x01, so this is a "Background image, usually width and height of screen. Seen in Type B & C faces".
-Blob Table Index = 000, so first item stored in the blob table.
-X = 0, Y = 0. The bitmap will be displayed starting at top left of watch face.
-Width = 240, Height = 280. The bitmap will fill that area of the watch face.
-Filename = background000.bmp. This is where the bitmap data will be loaded from and stored in the blob table.
+Data Type = 0x01, so this is a "Background image, usually width and height of screen. Seen in Type B & C faces".  
+Blob Table Index = 000, so first item stored in the blob table.  
+X = 0, Y = 0. The bitmap will be displayed starting at top left of watch face.  
+Width = 240, Height = 280. The bitmap will fill that area of the watch face.  
+Filename = background000.bmp. This is where the bitmap data will be loaded from and stored in the blob table.  
 
 Looking at the line:
 ```
 #              TYPE  INDEX         X    Y    W    H     FILENAME
-faceData       0x12    001        39   11   12   18	    db000.bmp
+faceData       0x12    001        39   11   12   18     db000.bmp
 ```
-Data Type = 0x12. This is a "Year, 2 digits, left aligned".
-Blob Table Index = 001, so starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 for digits 0 to 9.
-X = 39, Y = 11. This is where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.
-Width = 12, Height = 18. Each digit will use this much space.
-Filename = db000.bmp. This is the bitmap data for the first of the 10 digits 0-9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc.
+Data Type = 0x12. This is a "Year, 2 digits, left aligned".  
+Blob Table Index = 001, so starting as the second item stored in the blob table. As this is a digit, it will take up positions 001 to 010 for digits 0 to 9.  
+X = 39, Y = 11. This is where the first digit of the year will be displayed on the watch face. The second digit will be displayed to the right of the first digit.  
+Width = 12, Height = 18. Each digit will use this much space.  
+Filename = db000.bmp. This is the bitmap data for the first of the 10 digits 0-9. The rest of the bitmap data for the digits will be automatically loaded from db001.bmp, db002.bmp etc.  
 
 
 ### Data types
@@ -158,19 +158,18 @@ Code  Name              Count  Description
 ```
 
 ## Supported image formats
-```
-Export: Windows BMP: 16-bit RGB565.   The binary watch face files only support RGB565.
-Import: Windows BMP: 16-bit RGB565.
-                     24-bit RGB888.   Will be converted to RGB565 by the program.
-                     32-bit ARGB8888. The program will attempt basic alpha blending against the background image.
-                                      Note that the watch itself does NOT support an alpha channel.
-```
+The program supports specific varieties of Windows BMP files only.
+**Export:** Windows BMP, 16-bit RGB565. (The binary watch face files only support RGB565).  
+**Import:** Windows BMP: 
+- 16-bit RGB565. As is.
+- 24-bit RGB888. Will be converted to RGB565 by the program.
+- 32-bit ARGB8888. The program will attempt basic alpha blending against the background image. Note that the watch itself does NOT support an alpha channel.
 
 ## Supported watches
-All Da Fit watches (using MoYoung v2 firmware) should be supported to some extent.
-Currently, only type A and type C watches are supported for unpacking.
-Creating new watchfaces is currently only supported for type C watches.
-Type B watches are compressed, and the decompression has not yet been implemented.
+All Da Fit watches (using MoYoung v2 firmware) should be supported to some extent.  
+Currently, only type A and type C watches are supported for unpacking.  
+Creating new watchfaces is currently only supported for type C watches.  
+Type B watches are compressed, and the decompression has not yet been implemented.  
 
 Tpls | Screen width x height (pixels) | File type | Example models | Example codes (starts with MOY-) | Comments 
 -----|------------|-----|----------|---------|--------------

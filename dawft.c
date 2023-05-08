@@ -809,17 +809,17 @@ int main(int argc, char * argv[]) {
 	// display help
     if(argc<3 || mode == HELP) {
 		printf("Usage:   %s MODE [OPTIONS] [FILENAME]\n\n",basename);
-		printf("\t%s\n","MODE:");
-		printf("\t%s\n","    info               Display info about binary file.");
-		printf("\t%s\n","    dump               Dump data from binary file to folder.");
-		printf("\t%s\n","    create             Create binary file from data in folder.");
-		printf("\t%s\n","    print_types        Print the data type codes and description.");
-		printf("\t%s\n","OPTIONS:");
-		printf("\t%s\n","    folder=FOLDERNAME  Folder to dump data to/read from. Defaults to the face design number.");
-		printf("\t%s\n","                       Required for create.");
-		printf("\t%s\n","    raw=true           When dumping, dump raw files. Default is false.");
-		printf("\t%s\n","    fileType=C         Specify type of binary file (A, B or C). Default is to autodetect or type A.");
-		printf("\t%s\n","FILENAME               Binary watch face file for input (or output). Required for info/dump/create.");
+		printf("%s\n","  MODE:");
+		printf("%s\n","    info               Display info about binary file.");
+		printf("%s\n","    dump               Dump data from binary file to folder.");
+		printf("%s\n","    create             Create binary file from data in folder.");
+		printf("%s\n","    print_types        Print the data type codes and description.");
+		printf("%s\n","  OPTIONS:");
+		printf("%s\n","    folder=FOLDERNAME  Folder to dump data to/read from. Defaults to the face design number.");
+		printf("%s\n","                       Required for create.");
+		printf("%s\n","    raw=true           When dumping, dump raw files. Default is false.");
+		printf("%s\n","    fileType=C         Specify type of binary file (A, B or C). Default is to autodetect or type A.");
+		printf("%s\n","  FILENAME               Binary watch face file for input (or output). Required for info/dump/create.");
 		printf("\n");
 		return 0;
     }
